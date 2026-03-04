@@ -180,6 +180,62 @@
       50% { transform: scale(1.15); }
     }
 
+    /* Left action buttons */
+    .action-buttons {
+      position: fixed;
+      left: 16px;
+      bottom: 50%;
+      transform: translateY(50%);
+      margin-top: 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 30;
+    }
+
+    .action-btn {
+      width: 64px; height: 64px;
+      border-radius: 16px;
+      border: 3px solid rgba(100, 150, 255, 0.3);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background: rgba(5, 5, 30, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-tap-highlight-color: transparent;
+      opacity: 0.5;
+    }
+    .action-btn .action-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 6px;
+      letter-spacing: 1px;
+      margin-top: 2px;
+      color: #6688cc;
+      text-transform: uppercase;
+    }
+    .action-btn:hover {
+      transform: scale(1.12);
+      opacity: 0.9;
+      border-color: rgba(100, 180, 255, 0.6);
+      box-shadow: 0 0 20px rgba(50, 100, 255, 0.4);
+    }
+    .action-btn:active { transform: scale(0.95) !important; }
+    .action-btn.ready {
+      opacity: 1;
+      border-color: rgba(100, 180, 255, 0.6);
+      box-shadow: 0 0 15px rgba(50, 100, 255, 0.3);
+      animation: spaceGlow 2.5s ease infinite;
+    }
+    .action-btn.ready .action-label { color: #88bbff; }
+    @keyframes spaceGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(50, 100, 255, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(80, 150, 255, 0.6); }
+    }
+
     .btn-deactivate {
       background: linear-gradient(135deg, #ff4444, #ff8800);
       color: #1a0000;
@@ -356,8 +412,8 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) scale(0);
-      width: min(400px, 85vw);
-      height: min(300px, 60vh);
+      width: min(420px, 85vw);
+      height: min(320px, 60vh);
       border-radius: 20px;
       border: 2px solid rgba(100, 150, 255, 0.4);
       background: radial-gradient(ellipse at center, #05051a 0%, #000008 100%);
@@ -371,6 +427,10 @@
     .space-view.visible {
       transform: translate(-50%, -50%) scale(1);
       opacity: 1;
+    }
+    .space-view.closeup {
+      width: min(600px, 92vw);
+      height: min(450px, 75vh);
     }
     .space-view-label {
       position: absolute;
@@ -425,6 +485,13 @@
 
     <div class="address-badge">
       455 Avenue Argyle, Westmount, QC &bull; Protection Active 24/7
+    </div>
+  </div>
+
+  <div class="action-buttons">
+    <div class="action-btn" id="btnSpaceView" onclick="forceSpaceView()">
+      <span>&#128640;</span>
+      <span class="action-label">Espace</span>
     </div>
   </div>
 
@@ -562,12 +629,6 @@
       ctx.lineTo(hx, hy - hh/1.2);
       ctx.lineTo(hx + hw/2 + 20, hy - hh/3);
       ctx.stroke();
-
-      // Chimney
-      ctx.fillStyle = '#3d3328';
-      ctx.fillRect(hx + hw * 0.2, hy - hh/1.05, hw * 0.12, hh * 0.25);
-      ctx.fillStyle = '#2a2a35';
-      ctx.fillRect(hx + hw * 0.18, hy - hh/1.05, hw * 0.16, hh * 0.04);
 
       // Windows - two rows
       const winColor = barrierActive ? 'rgba(255, 220, 140, 0.9)' : 'rgba(255, 200, 100, 0.35)';
@@ -1566,86 +1627,263 @@
         this.x = x; this.y = y;
         this.element = element;
         const angle = Math.atan2(ty - y, tx - x);
-        const speed = 6 + Math.random() * 4;
+        this.angle = angle;
+        const speed = element === 'fire' ? 7 + Math.random() * 3 : 6 + Math.random() * 4;
         this.vx = Math.cos(angle) * speed;
         this.vy = Math.sin(angle) * speed;
         this.life = 1;
-        this.size = element === 'venom' ? 8 : 6;
+        this.size = element === 'fire' ? 10 : element === 'venom' ? 9 : element === 'ice' ? 8 : 7;
         this.trail = [];
+        this.t = Math.random() * 100; // animation offset
       }
 
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.life -= 0.02;
-        this.trail.push({ x: this.x, y: this.y, life: 1 });
-        if (this.trail.length > 10) this.trail.shift();
-        this.trail.forEach(t => t.life -= 0.1);
+        this.life -= 0.015;
+        this.t++;
+        this.trail.push({ x: this.x, y: this.y, life: 1, element: this.element });
+        if (this.trail.length > 15) this.trail.shift();
+        this.trail.forEach(t => t.life -= 0.08);
       }
 
       draw() {
         if (this.life <= 0) return;
         ctx.save();
+        const s = this.size;
+        const ang = Math.atan2(this.vy, this.vx);
 
-        const colors = {
-          fire: { main: '#ff4400', glow: '#ff880066', trail: '#ff660044' },
-          ice: { main: '#00ddff', glow: '#88eeff66', trail: '#00bbff44' },
-          electric: { main: '#ffff00', glow: '#ffff8866', trail: '#ffee0044' },
-          water: { main: '#0088ff', glow: '#44aaff66', trail: '#0066ff44' },
-          venom: { main: '#aa00ff', glow: '#cc44ff66', trail: '#8800cc44' }
-        };
-        const c = colors[this.element] || colors.fire;
+        if (this.element === 'fire') {
+          // === FIREBALL with inner flames ===
+          // Fiery trail
+          this.trail.forEach((t, i) => {
+            if (t.life <= 0) return;
+            const tr = s * t.life * 0.7;
+            const flicker = Math.sin(this.t * 0.3 + i) * 2;
+            const grd = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, tr + flicker);
+            grd.addColorStop(0, `rgba(255, 255, 100, ${t.life * 0.6})`);
+            grd.addColorStop(0.4, `rgba(255, 120, 0, ${t.life * 0.4})`);
+            grd.addColorStop(1, `rgba(255, 0, 0, 0)`);
+            ctx.beginPath();
+            ctx.arc(t.x + (Math.random() - 0.5) * 2, t.y + (Math.random() - 0.5) * 2, tr + flicker, 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+          });
+          // Outer glow
+          ctx.shadowColor = '#ff6600';
+          ctx.shadowBlur = 30;
+          // Main fireball
+          const fbGrd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s * 1.5);
+          fbGrd.addColorStop(0, '#ffffcc');
+          fbGrd.addColorStop(0.2, '#ffcc00');
+          fbGrd.addColorStop(0.5, '#ff6600');
+          fbGrd.addColorStop(0.8, '#ff2200');
+          fbGrd.addColorStop(1, 'rgba(200, 0, 0, 0)');
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, s * 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = fbGrd;
+          ctx.fill();
+          // Inner flame tendrils
+          for (let f = 0; f < 5; f++) {
+            const fa = ang + Math.PI + (Math.random() - 0.5) * 1.5;
+            const fl = s * (0.8 + Math.random() * 1.2);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.quadraticCurveTo(
+              this.x + Math.cos(fa) * fl * 0.5 + (Math.random() - 0.5) * 4,
+              this.y + Math.sin(fa) * fl * 0.5 + (Math.random() - 0.5) * 4,
+              this.x + Math.cos(fa) * fl,
+              this.y + Math.sin(fa) * fl
+            );
+            ctx.strokeStyle = `rgba(255, ${150 + Math.random() * 105}, 0, ${0.3 + Math.random() * 0.4})`;
+            ctx.lineWidth = 1 + Math.random() * 2;
+            ctx.stroke();
+          }
+          // White hot core
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, s * 0.4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
 
-        // Trail
-        this.trail.forEach((t, i) => {
-          if (t.life <= 0) return;
-          ctx.beginPath();
-          ctx.arc(t.x, t.y, this.size * t.life * 0.5, 0, Math.PI * 2);
-          ctx.fillStyle = c.trail;
-          ctx.fill();
-        });
-
-        // Main projectile
-        ctx.shadowColor = c.glow;
-        ctx.shadowBlur = 20;
-        ctx.beginPath();
-        if (this.element === 'venom') {
-          // Ice spike shape
-          ctx.save();
-          ctx.translate(this.x, this.y);
-          ctx.rotate(Math.atan2(this.vy, this.vx));
-          ctx.beginPath();
-          ctx.moveTo(this.size * 2, 0);
-          ctx.lineTo(-this.size, -this.size * 0.6);
-          ctx.lineTo(-this.size * 0.5, 0);
-          ctx.lineTo(-this.size, this.size * 0.6);
-          ctx.closePath();
-          ctx.fillStyle = '#88eeff';
-          ctx.fill();
-          // Venom drips
-          ctx.beginPath();
-          ctx.arc(this.size * 0.5, 3, 2, 0, Math.PI * 2);
-          ctx.fillStyle = '#00ff44';
-          ctx.shadowColor = '#00ff4488';
-          ctx.fill();
-          ctx.restore();
         } else if (this.element === 'ice') {
-          // Ice spike
+          // === ICE SPIKE - crystalline and sharp ===
+          // Icy shimmer trail
+          this.trail.forEach((t, i) => {
+            if (t.life <= 0) return;
+            ctx.beginPath();
+            ctx.arc(t.x + (Math.random() - 0.5) * 3, t.y + (Math.random() - 0.5) * 3, 2 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(180, 240, 255, ${t.life * 0.5})`;
+            ctx.fill();
+          });
           ctx.save();
           ctx.translate(this.x, this.y);
-          ctx.rotate(Math.atan2(this.vy, this.vx));
+          ctx.rotate(ang);
+          // Glow
+          ctx.shadowColor = '#00ccff';
+          ctx.shadowBlur = 20;
+          // Main spike
           ctx.beginPath();
-          ctx.moveTo(this.size * 1.8, 0);
-          ctx.lineTo(-this.size, -this.size * 0.5);
-          ctx.lineTo(-this.size * 0.3, 0);
-          ctx.lineTo(-this.size, this.size * 0.5);
+          ctx.moveTo(s * 2.5, 0);
+          ctx.lineTo(s * 0.3, -s * 0.6);
+          ctx.lineTo(-s * 1.2, -s * 0.35);
+          ctx.lineTo(-s * 0.8, 0);
+          ctx.lineTo(-s * 1.2, s * 0.35);
+          ctx.lineTo(s * 0.3, s * 0.6);
           ctx.closePath();
-          ctx.fillStyle = c.main;
+          const iceGrd = ctx.createLinearGradient(-s, 0, s * 2.5, 0);
+          iceGrd.addColorStop(0, '#aaeeff');
+          iceGrd.addColorStop(0.5, '#00ddff');
+          iceGrd.addColorStop(1, '#ffffff');
+          ctx.fillStyle = iceGrd;
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          // Crystal facets
+          ctx.beginPath();
+          ctx.moveTo(s * 2.5, 0);
+          ctx.lineTo(s * 0.3, -s * 0.2);
+          ctx.lineTo(-s * 0.5, 0);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          // Side shards
+          ctx.beginPath();
+          ctx.moveTo(s * 0.5, -s * 0.5);
+          ctx.lineTo(s * 0.8, -s * 1.1);
+          ctx.lineTo(s * 1.2, -s * 0.3);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(200, 240, 255, 0.5)';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(s * 0.3, s * 0.5);
+          ctx.lineTo(s * 0.5, s * 1.0);
+          ctx.lineTo(s * 1.0, s * 0.3);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(200, 240, 255, 0.4)';
           ctx.fill();
           ctx.restore();
-        } else {
-          ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
-          ctx.fillStyle = c.main;
+
+        } else if (this.element === 'venom') {
+          // === VENOM ICE SPIKE - icy with toxic green ===
+          this.trail.forEach((t, i) => {
+            if (t.life <= 0) return;
+            // Green toxic drips in trail
+            ctx.beginPath();
+            ctx.arc(t.x, t.y + Math.sin(this.t * 0.1 + i) * 3, 3 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 255, 80, ${t.life * 0.5})`;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, 2 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(150, 220, 255, ${t.life * 0.3})`;
+            ctx.fill();
+          });
+          ctx.save();
+          ctx.translate(this.x, this.y);
+          ctx.rotate(ang);
+          ctx.shadowColor = '#00ff44';
+          ctx.shadowBlur = 25;
+          // Main spike shape
+          ctx.beginPath();
+          ctx.moveTo(s * 2.5, 0);
+          ctx.lineTo(-s, -s * 0.6);
+          ctx.lineTo(-s * 0.5, 0);
+          ctx.lineTo(-s, s * 0.6);
+          ctx.closePath();
+          const venomGrd = ctx.createLinearGradient(-s, 0, s * 2.5, 0);
+          venomGrd.addColorStop(0, '#88eeff');
+          venomGrd.addColorStop(0.6, '#44ddaa');
+          venomGrd.addColorStop(1, '#00ff66');
+          ctx.fillStyle = venomGrd;
+          ctx.fill();
+          // Venom veins running through spike
+          ctx.strokeStyle = 'rgba(0, 255, 80, 0.7)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.3, 0);
+          ctx.bezierCurveTo(s * 0.3, -s * 0.2, s * 1.0, s * 0.1, s * 2.2, 0);
+          ctx.stroke();
+          // Dripping venom drops
+          for (let d = 0; d < 3; d++) {
+            const dx = s * (0.3 + d * 0.5);
+            const dy = s * 0.4 + Math.sin(this.t * 0.15 + d) * s * 0.3;
+            ctx.beginPath();
+            ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#00ff44';
+            ctx.fill();
+          }
+          ctx.restore();
+
+        } else if (this.element === 'electric') {
+          // === ELECTRIC BOLT - jagged lightning ball ===
+          this.trail.forEach((t, i) => {
+            if (t.life <= 0) return;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, 3 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 100, ${t.life * 0.4})`;
+            ctx.fill();
+          });
+          ctx.shadowColor = '#ffff00';
+          ctx.shadowBlur = 25;
+          // Electric core
+          const elGrd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s);
+          elGrd.addColorStop(0, '#ffffff');
+          elGrd.addColorStop(0.3, '#ffff88');
+          elGrd.addColorStop(0.7, '#ffcc00');
+          elGrd.addColorStop(1, 'rgba(255, 200, 0, 0)');
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
+          ctx.fillStyle = elGrd;
+          ctx.fill();
+          // Lightning arcs
+          for (let l = 0; l < 4; l++) {
+            const la = (l / 4) * Math.PI * 2 + this.t * 0.1;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            let lx = this.x, ly = this.y;
+            for (let seg = 0; seg < 4; seg++) {
+              lx += Math.cos(la + (Math.random() - 0.5) * 1.5) * (s * 0.6);
+              ly += Math.sin(la + (Math.random() - 0.5) * 1.5) * (s * 0.6);
+              ctx.lineTo(lx, ly);
+            }
+            ctx.strokeStyle = `rgba(255, 255, ${150 + Math.random() * 105}, 0.8)`;
+            ctx.lineWidth = 1 + Math.random();
+            ctx.stroke();
+          }
+
+        } else if (this.element === 'water') {
+          // === WATER BLAST - swirling water orb ===
+          this.trail.forEach((t, i) => {
+            if (t.life <= 0) return;
+            ctx.beginPath();
+            ctx.arc(t.x + (Math.random() - 0.5) * 4, t.y + (Math.random() - 0.5) * 4, 3 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 150, 255, ${t.life * 0.3})`;
+            ctx.fill();
+          });
+          ctx.shadowColor = '#0088ff';
+          ctx.shadowBlur = 20;
+          // Water sphere
+          const wGrd = ctx.createRadialGradient(this.x - s * 0.3, this.y - s * 0.3, 0, this.x, this.y, s * 1.2);
+          wGrd.addColorStop(0, 'rgba(200, 240, 255, 0.9)');
+          wGrd.addColorStop(0.4, 'rgba(0, 150, 255, 0.8)');
+          wGrd.addColorStop(1, 'rgba(0, 50, 200, 0)');
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, s * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = wGrd;
+          ctx.fill();
+          // Swirl lines
+          for (let w = 0; w < 3; w++) {
+            const wa = this.t * 0.08 + (w / 3) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, s * (0.4 + w * 0.2), wa, wa + Math.PI * 0.8);
+            ctx.strokeStyle = `rgba(200, 240, 255, ${0.3 + w * 0.1})`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+          // Highlight
+          ctx.beginPath();
+          ctx.arc(this.x - s * 0.3, this.y - s * 0.3, s * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
           ctx.fill();
         }
 
@@ -1697,6 +1935,230 @@
         ctx.fillStyle = this.color.replace('1)', `${this.life})`);
         ctx.fill();
       }
+    }
+
+    // ===== WATER WAVES =====
+    const waterWaves = [];
+    let lastWaveTime = 0;
+
+    class WaterWave {
+      constructor(angle) {
+        // Wave originates from the barrier and pushes outward
+        this.angle = angle;
+        this.cx = centerX;
+        this.cy = centerY + 20;
+        this.radius = barrierRadius * 0.9;
+        this.spread = 0; // how far the wave has traveled outward
+        this.height = 40 + Math.random() * 30; // wave height
+        this.width = 0.8 + Math.random() * 0.4; // angular width
+        this.life = 1;
+        this.speed = 4 + Math.random() * 2;
+        this.wavePhase = Math.random() * Math.PI * 2;
+      }
+
+      update() {
+        this.spread += this.speed;
+        this.life -= 0.012;
+        this.wavePhase += 0.1;
+        // Check if wave hits any monster
+        for (let i = monsters.length - 1; i >= 0; i--) {
+          if (monsters[i].state !== 'approaching') continue;
+          const mAngle = Math.atan2(monsters[i].y - this.cy, monsters[i].x - this.cx);
+          let angleDiff = Math.abs(mAngle - this.angle);
+          if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+          if (angleDiff > this.width * 0.5) continue;
+          const mDist = Math.sqrt(Math.pow(monsters[i].x - this.cx, 2) + Math.pow((monsters[i].y - this.cy) / 0.55, 2));
+          const waveDist = this.radius + this.spread;
+          if (Math.abs(mDist - waveDist) < 40) {
+            // Wave hits monster - fling it to space!
+            monsters[i].state = 'hit';
+            monsters[i].hitTime = performance.now();
+            const pushAngle = Math.atan2(monsters[i].y - this.cy, monsters[i].x - this.cx);
+            monsters[i].flyVx = Math.cos(pushAngle) * 12;
+            monsters[i].flyVy = Math.sin(pushAngle) * 12 - 10;
+            monsters[i].flyRotSpeed = (Math.random() - 0.5) * 0.4;
+            monstersDefeated++;
+            document.getElementById('monsterCount').textContent = monstersDefeated;
+            shakeAmount = 10;
+            // Water splash particles
+            for (let p = 0; p < 15; p++) {
+              impactParticles.push(new ImpactParticle(
+                monsters[i].x + (Math.random() - 0.5) * 30,
+                monsters[i].y + (Math.random() - 0.5) * 30,
+                ['rgba(0,150,255,1)', 'rgba(100,200,255,1)', 'rgba(200,240,255,1)'][Math.floor(Math.random() * 3)]
+              ));
+            }
+            spaceTexts.push(new SpaceText(monsters[i].x, monsters[i].y - 30));
+          }
+        }
+      }
+
+      draw() {
+        if (this.life <= 0) return;
+        ctx.save();
+        const waveDist = this.radius + this.spread;
+
+        // Draw the wave arc
+        const startAngle = this.angle - this.width * 0.5;
+        const endAngle = this.angle + this.width * 0.5;
+        const segments = 20;
+
+        ctx.shadowColor = 'rgba(0, 150, 255, 0.5)';
+        ctx.shadowBlur = 15;
+
+        // Wave body (tall arc of water)
+        for (let layer = 0; layer < 3; layer++) {
+          const layerOffset = layer * 8;
+          const h = this.height * (1 - layer * 0.25) * this.life;
+          ctx.beginPath();
+          for (let i = 0; i <= segments; i++) {
+            const a = startAngle + (endAngle - startAngle) * (i / segments);
+            const waveH = h * Math.sin((i / segments) * Math.PI) * (1 + Math.sin(this.wavePhase + i * 0.5) * 0.2);
+            const bx = this.cx + Math.cos(a) * (waveDist + layerOffset);
+            const by = this.cy + Math.sin(a) * (waveDist + layerOffset) * 0.55;
+            if (i === 0) ctx.moveTo(bx, by - waveH);
+            else ctx.lineTo(bx, by - waveH);
+          }
+          // Close with base
+          for (let i = segments; i >= 0; i--) {
+            const a = startAngle + (endAngle - startAngle) * (i / segments);
+            const bx = this.cx + Math.cos(a) * (waveDist + layerOffset);
+            const by = this.cy + Math.sin(a) * (waveDist + layerOffset) * 0.55;
+            ctx.lineTo(bx, by);
+          }
+          ctx.closePath();
+          const alpha = this.life * (0.5 - layer * 0.12);
+          const colors = [
+            `rgba(0, 120, 255, ${alpha})`,
+            `rgba(50, 180, 255, ${alpha})`,
+            `rgba(150, 220, 255, ${alpha})`
+          ];
+          ctx.fillStyle = colors[layer];
+          ctx.fill();
+        }
+
+        // White foam crest on top
+        ctx.beginPath();
+        for (let i = 0; i <= segments; i++) {
+          const a = startAngle + (endAngle - startAngle) * (i / segments);
+          const waveH = this.height * this.life * Math.sin((i / segments) * Math.PI) * (1 + Math.sin(this.wavePhase + i * 0.5) * 0.2);
+          const bx = this.cx + Math.cos(a) * waveDist;
+          const by = this.cy + Math.sin(a) * waveDist * 0.55;
+          if (i === 0) ctx.moveTo(bx, by - waveH);
+          else ctx.lineTo(bx, by - waveH);
+        }
+        ctx.strokeStyle = `rgba(255, 255, 255, ${this.life * 0.7})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Splash droplets at crest
+        if (this.life > 0.3) {
+          for (let d = 0; d < 5; d++) {
+            const da = startAngle + Math.random() * (endAngle - startAngle);
+            const bx = this.cx + Math.cos(da) * waveDist;
+            const by = this.cy + Math.sin(da) * waveDist * 0.55;
+            const dh = this.height * this.life * 0.5;
+            ctx.beginPath();
+            ctx.arc(bx + (Math.random() - 0.5) * 15, by - dh - Math.random() * 20, 2 + Math.random() * 3, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(200, 240, 255, ${this.life * 0.5})`;
+            ctx.fill();
+          }
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+
+    // Spawn water waves periodically when water element is active
+    function trySpawnWaterWave(t) {
+      if (!barrierActive || !activeElements.water) return;
+      if (t - lastWaveTime > 4000 + Math.random() * 3000) {
+        // Aim at a random approaching monster, or random direction
+        let angle = Math.random() * Math.PI * 2;
+        for (const m of monsters) {
+          if (m.state === 'approaching') {
+            angle = Math.atan2(m.y - (centerY + 20), m.x - centerX);
+            break;
+          }
+        }
+        waterWaves.push(new WaterWave(angle));
+        lastWaveTime = t;
+        // Play a water sound
+        try {
+          const actx = new (window.AudioContext || window.webkitAudioContext)();
+          const dur = 0.5;
+          const noise = actx.createBufferSource();
+          const buf = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (actx.sampleRate * 0.2));
+          noise.buffer = buf;
+          const filter = actx.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.value = 400;
+          const gain = actx.createGain();
+          gain.gain.setValueAtTime(0.15, actx.currentTime);
+          gain.gain.exponentialDecayTo && gain.gain.exponentialDecayTo(0.01, actx.currentTime + dur);
+          gain.gain.linearRampToValueAtTime(0.01, actx.currentTime + dur);
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(actx.destination);
+          noise.start();
+          setTimeout(() => actx.close(), 600);
+        } catch(e) {}
+      }
+    }
+
+    // ===== ELEMENT HIT EFFECTS =====
+    function spawnElementHitEffect(x, y, element, monster) {
+      const particleColors = {
+        fire: ['rgba(255,200,0,1)', 'rgba(255,100,0,1)', 'rgba(255,50,0,1)', 'rgba(255,255,100,1)'],
+        ice: ['rgba(150,230,255,1)', 'rgba(200,240,255,1)', 'rgba(100,200,255,1)', 'rgba(255,255,255,1)'],
+        electric: ['rgba(255,255,0,1)', 'rgba(255,255,150,1)', 'rgba(255,200,0,1)', 'rgba(255,255,255,1)'],
+        water: ['rgba(0,150,255,1)', 'rgba(100,200,255,1)', 'rgba(200,240,255,1)', 'rgba(0,100,200,1)'],
+        venom: ['rgba(0,255,80,1)', 'rgba(100,255,150,1)', 'rgba(150,100,255,1)', 'rgba(200,255,200,1)']
+      };
+
+      const colors = particleColors[element] || particleColors.fire;
+
+      // Spawn impact particles
+      for (let i = 0; i < 12; i++) {
+        impactParticles.push(new ImpactParticle(
+          x + (Math.random() - 0.5) * 20,
+          y + (Math.random() - 0.5) * 20,
+          colors[Math.floor(Math.random() * colors.length)]
+        ));
+      }
+
+      // Fire: spawn burn marks (extra flame particles that linger)
+      if (element === 'fire') {
+        for (let i = 0; i < 8; i++) {
+          const p = new ImpactParticle(
+            monster.x + (Math.random() - 0.5) * monster.size,
+            monster.y + (Math.random() - 0.5) * monster.size,
+            colors[Math.floor(Math.random() * colors.length)]
+          );
+          p.vy = -2 - Math.random() * 3; // flames go up
+          p.vx = (Math.random() - 0.5) * 2;
+          p.size = 4 + Math.random() * 4;
+          p.life = 1.5;
+          impactParticles.push(p);
+        }
+      }
+
+      // Ice: spawn crystal shatter
+      if (element === 'ice') {
+        for (let i = 0; i < 6; i++) {
+          const p = new ImpactParticle(x + (Math.random() - 0.5) * 15, y + (Math.random() - 0.5) * 15, 'rgba(200,240,255,1)');
+          p.size = 3 + Math.random() * 5;
+          p.vx = (Math.random() - 0.5) * 10;
+          p.vy = (Math.random() - 0.5) * 10;
+          impactParticles.push(p);
+        }
+      }
+
+      // Small screen shake
+      shakeAmount = Math.max(shakeAmount, 3);
     }
 
     // ===== FLYING TO SPACE TEXT =====
@@ -1981,8 +2443,9 @@
       // Barrier
       drawBarrier(t);
 
-      // Spawn monsters
+      // Spawn monsters and water waves
       spawnMonster(t);
+      trySpawnWaterWave(t);
 
       // Update and draw monsters
       for (let i = monsters.length - 1; i >= 0; i--) {
@@ -2007,11 +2470,31 @@
         }
       }
 
-      // Update and draw projectiles
+      // Update and draw projectiles + check collision with monsters
       for (let i = projectiles.length - 1; i >= 0; i--) {
         projectiles[i].update();
         projectiles[i].draw();
+        // Check collision with approaching monsters
+        for (let j = monsters.length - 1; j >= 0; j--) {
+          if (monsters[j].state !== 'approaching') continue;
+          const dx = projectiles[i].x - monsters[j].x;
+          const dy = projectiles[i].y - monsters[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < monsters[j].size + projectiles[i].size) {
+            // Element-specific hit effects
+            spawnElementHitEffect(projectiles[i].x, projectiles[i].y, projectiles[i].element, monsters[j]);
+            projectiles[i].life = 0;
+            break;
+          }
+        }
         if (projectiles[i].life <= 0) projectiles.splice(i, 1);
+      }
+
+      // Update and draw water waves
+      for (let i = waterWaves.length - 1; i >= 0; i--) {
+        waterWaves[i].update();
+        waterWaves[i].draw();
+        if (waterWaves[i].life <= 0) waterWaves.splice(i, 1);
       }
 
       // Impact particles
@@ -2264,38 +2747,72 @@
       ];
     }
 
-    function showSpaceView(monster) {
+    let lastDefeatedMonster = null;
+    let spaceViewIsCloseup = false;
+    let spaceViewTimeout = null;
+
+    function showSpaceView(monster, isCloseup) {
       if (spaceViewActive) return;
-      spaceViewCount++;
-      // Only show every 2nd or 3rd monster to not be too frequent
-      if (spaceViewCount % 3 !== 0 && !superBoostActive) return;
+      if (!isCloseup) {
+        spaceViewCount++;
+        if (spaceViewCount % 3 !== 0 && !superBoostActive) return;
+      }
 
       spaceViewActive = true;
       spaceMonster = monster;
       spaceViewTimer = 0;
       spaceMonsterAngle = 0;
-      spaceMonsterScale = 1.5;
+      spaceViewIsCloseup = !!isCloseup;
+      spaceMonsterScale = isCloseup ? 2.5 : 1.5;
+
+      // Toggle closeup class for bigger size
+      spaceViewEl.classList.toggle('closeup', !!isCloseup);
 
       initSpaceView();
       spaceViewEl.classList.add('visible');
 
       // Generate debris from the monster
-      spaceDebris = Array.from({length: 15}, () => ({
+      spaceDebris = Array.from({length: isCloseup ? 25 : 15}, () => ({
         x: spaceCanvas.width / 2,
         y: spaceCanvas.height / 2,
-        vx: (Math.random() - 0.5) * 4,
-        vy: (Math.random() - 0.5) * 4,
-        size: Math.random() * 5 + 2,
+        vx: (Math.random() - 0.5) * (isCloseup ? 3 : 4),
+        vy: (Math.random() - 0.5) * (isCloseup ? 3 : 4),
+        size: Math.random() * (isCloseup ? 8 : 5) + 2,
         color: [monster.palette.body, monster.palette.accent, monster.palette.eye][Math.floor(Math.random() * 3)],
         rot: Math.random() * Math.PI * 2,
         rotSpeed: (Math.random() - 0.5) * 0.1
       }));
 
-      // Auto-hide after 3 seconds
-      setTimeout(() => {
+      // Auto-hide (longer for close-up)
+      if (spaceViewTimeout) clearTimeout(spaceViewTimeout);
+      spaceViewTimeout = setTimeout(() => {
         spaceViewEl.classList.remove('visible');
+        spaceViewEl.classList.remove('closeup');
         setTimeout(() => { spaceViewActive = false; }, 400);
-      }, 3000);
+      }, isCloseup ? 5000 : 3000);
+    }
+
+    // Force space view from button: creates a fresh monster and ejects it
+    function forceSpaceView() {
+      if (spaceViewActive) return;
+      // Create a monster to display
+      const m = new Monster();
+      m.x = centerX;
+      m.y = centerY;
+      lastDefeatedMonster = m;
+      showSpaceView(m, true);
+      // Play impact sound for effect
+      if (typeof playImpactSound === 'function') {
+        try { playImpactSound(); } catch(e) {}
+      }
+    }
+
+    // Update the space button glow when monsters have been defeated
+    function updateSpaceButton() {
+      const btn = document.getElementById('btnSpaceView');
+      if (monstersDefeated > 0) {
+        btn.classList.add('ready');
+      }
     }
 
     function drawSpaceView(t) {
@@ -2375,7 +2892,8 @@
 
       // Monster tumbling in space
       spaceMonsterAngle += 0.03;
-      spaceMonsterScale = Math.max(0.5, spaceMonsterScale - 0.003);
+      const shrinkRate = spaceViewIsCloseup ? 0.001 : 0.003;
+      spaceMonsterScale = Math.max(0.5, spaceMonsterScale - shrinkRate);
       const mx = sw / 2 + Math.sin(spaceViewTimer * 0.02) * 20;
       const my = sh / 2 + Math.cos(spaceViewTimer * 0.015) * 15 - spaceViewTimer * 0.3;
 
@@ -2510,6 +3028,8 @@
       const wasBefore = this.state;
       origMonsterUpdate.call(this, t);
       if (wasBefore === 'approaching' && this.state === 'hit') {
+        lastDefeatedMonster = this;
+        updateSpaceButton();
         showSpaceView(this);
       }
     };
