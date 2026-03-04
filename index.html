@@ -1632,17 +1632,17 @@
         this.life = 1;
         this.size = element === 'fire' ? 10 : element === 'venom' ? 9 : element === 'ice' ? 8 : 7;
         this.trail = [];
-        this.t = Math.random() * 100; // animation offset
+        this.t = Math.random() * 100;
       }
 
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.life -= 0.015;
+        this.life -= 0.018;
         this.t++;
-        this.trail.push({ x: this.x, y: this.y, life: 1, element: this.element });
-        if (this.trail.length > 15) this.trail.shift();
-        this.trail.forEach(t => t.life -= 0.08);
+        this.trail.push({ x: this.x, y: this.y, life: 1 });
+        if (this.trail.length > 8) this.trail.shift();
+        this.trail.forEach(t => t.life -= 0.13);
       }
 
       draw() {
@@ -1656,20 +1656,12 @@
           // Fiery trail
           this.trail.forEach((t, i) => {
             if (t.life <= 0) return;
-            const tr = s * t.life * 0.7;
-            const flicker = Math.sin(this.t * 0.3 + i) * 2;
-            const grd = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, tr + flicker);
-            grd.addColorStop(0, `rgba(255, 255, 100, ${t.life * 0.6})`);
-            grd.addColorStop(0.4, `rgba(255, 120, 0, ${t.life * 0.4})`);
-            grd.addColorStop(1, `rgba(255, 0, 0, 0)`);
+            const tr = s * t.life * 0.6;
             ctx.beginPath();
-            ctx.arc(t.x + (Math.random() - 0.5) * 2, t.y + (Math.random() - 0.5) * 2, tr + flicker, 0, Math.PI * 2);
-            ctx.fillStyle = grd;
+            ctx.arc(t.x, t.y, tr, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, ${Math.floor(100 + t.life * 100)}, 0, ${t.life * 0.5})`;
             ctx.fill();
           });
-          // Outer glow
-          ctx.shadowColor = '#ff6600';
-          ctx.shadowBlur = 30;
           // Main fireball
           const fbGrd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s * 1.5);
           fbGrd.addColorStop(0, '#ffffcc');
@@ -1682,19 +1674,14 @@
           ctx.fillStyle = fbGrd;
           ctx.fill();
           // Inner flame tendrils
-          for (let f = 0; f < 5; f++) {
-            const fa = ang + Math.PI + (Math.random() - 0.5) * 1.5;
-            const fl = s * (0.8 + Math.random() * 1.2);
+          for (let f = 0; f < 3; f++) {
+            const fa = ang + Math.PI + (f - 1) * 0.5 + Math.sin(this.t * 0.2 + f) * 0.3;
+            const fl = s * (0.8 + Math.sin(this.t * 0.15 + f * 2) * 0.5);
             ctx.beginPath();
             ctx.moveTo(this.x, this.y);
-            ctx.quadraticCurveTo(
-              this.x + Math.cos(fa) * fl * 0.5 + (Math.random() - 0.5) * 4,
-              this.y + Math.sin(fa) * fl * 0.5 + (Math.random() - 0.5) * 4,
-              this.x + Math.cos(fa) * fl,
-              this.y + Math.sin(fa) * fl
-            );
-            ctx.strokeStyle = `rgba(255, ${150 + Math.random() * 105}, 0, ${0.3 + Math.random() * 0.4})`;
-            ctx.lineWidth = 1 + Math.random() * 2;
+            ctx.lineTo(this.x + Math.cos(fa) * fl, this.y + Math.sin(fa) * fl);
+            ctx.strokeStyle = `rgba(255, ${180 + f * 30}, 0, 0.5)`;
+            ctx.lineWidth = 2;
             ctx.stroke();
           }
           // White hot core
@@ -1716,9 +1703,6 @@
           ctx.save();
           ctx.translate(this.x, this.y);
           ctx.rotate(ang);
-          // Glow
-          ctx.shadowColor = '#00ccff';
-          ctx.shadowBlur = 20;
           // Main spike
           ctx.beginPath();
           ctx.moveTo(s * 2.5, 0);
@@ -1779,8 +1763,6 @@
           ctx.save();
           ctx.translate(this.x, this.y);
           ctx.rotate(ang);
-          ctx.shadowColor = '#00ff44';
-          ctx.shadowBlur = 25;
           // Main spike shape
           ctx.beginPath();
           ctx.moveTo(s * 2.5, 0);
@@ -1821,8 +1803,6 @@
             ctx.fillStyle = `rgba(255, 255, 100, ${t.life * 0.4})`;
             ctx.fill();
           });
-          ctx.shadowColor = '#ffff00';
-          ctx.shadowBlur = 25;
           // Electric core
           const elGrd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s);
           elGrd.addColorStop(0, '#ffffff');
@@ -1858,8 +1838,6 @@
             ctx.fillStyle = `rgba(0, 150, 255, ${t.life * 0.3})`;
             ctx.fill();
           });
-          ctx.shadowColor = '#0088ff';
-          ctx.shadowBlur = 20;
           // Water sphere
           const wGrd = ctx.createRadialGradient(this.x - s * 0.3, this.y - s * 0.3, 0, this.x, this.y, s * 1.2);
           wGrd.addColorStop(0, 'rgba(200, 240, 255, 0.9)');
@@ -1891,19 +1869,20 @@
     }
 
     function spawnProjectiles(tx, ty, angle) {
+      if (projectiles.length >= MAX_PROJECTILES) return;
       const elements = Object.keys(activeElements).filter(e => activeElements[e]);
+      if (elements.length === 0) return;
       const bx = centerX + Math.cos(angle) * barrierRadius * 0.9;
       const by = (centerY + 20) + Math.sin(angle) * barrierRadius * 0.55 * 0.9;
 
-      for (let i = 0; i < 5; i++) {
+      const count = Math.min(4, MAX_PROJECTILES - projectiles.length);
+      for (let i = 0; i < count; i++) {
         const el = elements[Math.floor(Math.random() * elements.length)];
         const spread = (Math.random() - 0.5) * 0.5;
         const pa = angle + spread;
         const px = bx + Math.cos(pa) * 10;
         const py = by + Math.sin(pa) * 10;
-        setTimeout(() => {
-          projectiles.push(new Projectile(px, py, tx + (Math.random() - 0.5) * 40, ty + (Math.random() - 0.5) * 40, el));
-        }, i * 50);
+        projectiles.push(new Projectile(px, py, tx + (Math.random() - 0.5) * 40, ty + (Math.random() - 0.5) * 40, el));
       }
     }
 
@@ -2202,80 +2181,58 @@
 
     // ===== AUTONOMOUS BARRIER FIRE =====
     let lastBarrierFire = 0;
-    const barrierFireInterval = 800; // fires every 800ms
+    const barrierFireInterval = 1000;
+    const MAX_PROJECTILES = 30;
 
     function barrierAutoFire(t) {
       if (!barrierActive) return;
       if (t - lastBarrierFire < barrierFireInterval) return;
+      if (projectiles.length >= MAX_PROJECTILES) return;
 
-      // Find approaching monsters to target
       const targets = monsters.filter(m => m.state === 'approaching');
       if (targets.length === 0) return;
 
       lastBarrierFire = t;
 
-      // Pick a random target
       const target = targets[Math.floor(Math.random() * targets.length)];
       const angle = Math.atan2(target.y - (centerY + 20), target.x - centerX);
-
-      // Barrier launch point
       const bx = centerX + Math.cos(angle) * barrierRadius * 0.9;
       const by = (centerY + 20) + Math.sin(angle) * barrierRadius * 0.55 * 0.9;
 
-      // Decide what to fire based on active elements and randomness
       const activeEls = Object.keys(activeElements).filter(e => activeElements[e]);
       if (activeEls.length === 0) return;
 
       const roll = Math.random();
 
       if (roll < 0.25 && activeEls.includes('fire')) {
-        // === FIREBALL VOLLEY === (2-3 fireballs)
-        const count = 2 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < count; i++) {
-          const spread = (Math.random() - 0.5) * 0.3;
-          setTimeout(() => {
-            projectiles.push(new Projectile(
-              bx + (Math.random() - 0.5) * 10,
-              by + (Math.random() - 0.5) * 10,
-              target.x + (Math.random() - 0.5) * 30,
-              target.y + (Math.random() - 0.5) * 30,
-              'fire'
-            ));
-          }, i * 80);
+        // FIREBALL VOLLEY
+        for (let i = 0; i < 2; i++) {
+          projectiles.push(new Projectile(
+            bx + (Math.random() - 0.5) * 10, by + (Math.random() - 0.5) * 10,
+            target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30, 'fire'
+          ));
         }
       } else if (roll < 0.5 && activeEls.includes('ice')) {
-        // === ICE SPIKE BARRAGE === (3-4 ice spikes in quick succession)
-        const count = 3 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < count; i++) {
+        // ICE SPIKE BARRAGE
+        for (let i = 0; i < 3; i++) {
           const spread = (Math.random() - 0.5) * 0.4;
           const pa = angle + spread;
-          setTimeout(() => {
-            projectiles.push(new Projectile(
-              bx + Math.cos(pa) * 8,
-              by + Math.sin(pa) * 8,
-              target.x + (Math.random() - 0.5) * 20,
-              target.y + (Math.random() - 0.5) * 20,
-              'ice'
-            ));
-          }, i * 60);
+          projectiles.push(new Projectile(
+            bx + Math.cos(pa) * 8, by + Math.sin(pa) * 8,
+            target.x + (Math.random() - 0.5) * 20, target.y + (Math.random() - 0.5) * 20, 'ice'
+          ));
         }
       } else if (roll < 0.7 && activeEls.length >= 2) {
-        // === ELEMENTAL BALL === (all active elements fused into a burst)
-        for (let i = 0; i < activeEls.length; i++) {
+        // ELEMENTAL BALL - all elements at once
+        activeEls.forEach((el, i) => {
           const spread = (i - (activeEls.length - 1) / 2) * 0.15;
           const pa = angle + spread;
-          setTimeout(() => {
-            projectiles.push(new Projectile(
-              bx + Math.cos(pa) * 6,
-              by + Math.sin(pa) * 6,
-              target.x + Math.cos(pa) * 15,
-              target.y + Math.sin(pa) * 15,
-              activeEls[i]
-            ));
-          }, i * 40);
-        }
+          projectiles.push(new Projectile(
+            bx + Math.cos(pa) * 6, by + Math.sin(pa) * 6,
+            target.x + Math.cos(pa) * 15, target.y + Math.sin(pa) * 15, el
+          ));
+        });
       } else {
-        // === RANDOM ELEMENT SHOT === (single powerful shot)
         const el = activeEls[Math.floor(Math.random() * activeEls.length)];
         projectiles.push(new Projectile(bx, by, target.x, target.y, el));
       }
