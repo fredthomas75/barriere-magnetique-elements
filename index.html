@@ -2200,6 +2200,87 @@
       }
     }
 
+    // ===== AUTONOMOUS BARRIER FIRE =====
+    let lastBarrierFire = 0;
+    const barrierFireInterval = 800; // fires every 800ms
+
+    function barrierAutoFire(t) {
+      if (!barrierActive) return;
+      if (t - lastBarrierFire < barrierFireInterval) return;
+
+      // Find approaching monsters to target
+      const targets = monsters.filter(m => m.state === 'approaching');
+      if (targets.length === 0) return;
+
+      lastBarrierFire = t;
+
+      // Pick a random target
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const angle = Math.atan2(target.y - (centerY + 20), target.x - centerX);
+
+      // Barrier launch point
+      const bx = centerX + Math.cos(angle) * barrierRadius * 0.9;
+      const by = (centerY + 20) + Math.sin(angle) * barrierRadius * 0.55 * 0.9;
+
+      // Decide what to fire based on active elements and randomness
+      const activeEls = Object.keys(activeElements).filter(e => activeElements[e]);
+      if (activeEls.length === 0) return;
+
+      const roll = Math.random();
+
+      if (roll < 0.25 && activeEls.includes('fire')) {
+        // === FIREBALL VOLLEY === (2-3 fireballs)
+        const count = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < count; i++) {
+          const spread = (Math.random() - 0.5) * 0.3;
+          setTimeout(() => {
+            projectiles.push(new Projectile(
+              bx + (Math.random() - 0.5) * 10,
+              by + (Math.random() - 0.5) * 10,
+              target.x + (Math.random() - 0.5) * 30,
+              target.y + (Math.random() - 0.5) * 30,
+              'fire'
+            ));
+          }, i * 80);
+        }
+      } else if (roll < 0.5 && activeEls.includes('ice')) {
+        // === ICE SPIKE BARRAGE === (3-4 ice spikes in quick succession)
+        const count = 3 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < count; i++) {
+          const spread = (Math.random() - 0.5) * 0.4;
+          const pa = angle + spread;
+          setTimeout(() => {
+            projectiles.push(new Projectile(
+              bx + Math.cos(pa) * 8,
+              by + Math.sin(pa) * 8,
+              target.x + (Math.random() - 0.5) * 20,
+              target.y + (Math.random() - 0.5) * 20,
+              'ice'
+            ));
+          }, i * 60);
+        }
+      } else if (roll < 0.7 && activeEls.length >= 2) {
+        // === ELEMENTAL BALL === (all active elements fused into a burst)
+        for (let i = 0; i < activeEls.length; i++) {
+          const spread = (i - (activeEls.length - 1) / 2) * 0.15;
+          const pa = angle + spread;
+          setTimeout(() => {
+            projectiles.push(new Projectile(
+              bx + Math.cos(pa) * 6,
+              by + Math.sin(pa) * 6,
+              target.x + Math.cos(pa) * 15,
+              target.y + Math.sin(pa) * 15,
+              activeEls[i]
+            ));
+          }, i * 40);
+        }
+      } else {
+        // === RANDOM ELEMENT SHOT === (single powerful shot)
+        const el = activeEls[Math.floor(Math.random() * activeEls.length)];
+        projectiles.push(new Projectile(bx, by, target.x, target.y, el));
+      }
+    }
+
     // ===== ACTIVATION / DEACTIVATION =====
     function activateBarrier() {
       if (barrierActive) return;
@@ -2441,8 +2522,9 @@
       // Barrier
       drawBarrier(t);
 
-      // Spawn monsters and water waves
+      // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
+      barrierAutoFire(t);
       trySpawnWaterWave(t);
 
       // Update and draw monsters
