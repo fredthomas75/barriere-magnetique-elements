@@ -151,6 +151,35 @@
     }
     .btn-activate:active { transform: scale(0.98); }
 
+    .btn-superboost {
+      background: linear-gradient(135deg, #ff0066, #ff8800, #ffee00, #00ff88, #00ccff, #aa00ff);
+      background-size: 300% 300%;
+      color: #fff;
+      font-size: clamp(12px, 2.2vw, 16px);
+      text-shadow: 0 0 10px rgba(0,0,0,0.5);
+      box-shadow: 0 0 30px #ff006644, 0 0 60px #aa00ff33, 0 4px 15px rgba(0,0,0,0.4);
+      animation: boostGradient 2s ease infinite;
+      display: none;
+    }
+    .btn-superboost:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 50px #ff006688, 0 0 80px #aa00ff55, 0 6px 25px rgba(0,0,0,0.5);
+    }
+    .btn-superboost:active { transform: scale(0.95); }
+    .btn-superboost.boosting {
+      animation: boostGradient 0.3s ease infinite, boostPulse 0.15s ease infinite;
+    }
+
+    @keyframes boostGradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes boostPulse {
+      0%, 100% { transform: scale(1.05); }
+      50% { transform: scale(1.15); }
+    }
+
     .btn-deactivate {
       background: linear-gradient(135deg, #ff4444, #ff8800);
       color: #1a0000;
@@ -162,45 +191,116 @@
     }
     .btn-deactivate:active { transform: scale(0.98); }
 
+    /* Super boost screen flash overlay */
+    .boost-flash {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 25;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    .boost-flash.active {
+      opacity: 1;
+      background: radial-gradient(circle at center, rgba(255,255,255,0.4), rgba(255,100,0,0.2), transparent 70%);
+      animation: flashPulse 0.15s ease;
+    }
+    @keyframes flashPulse {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
     .element-selector {
       position: fixed;
-      right: 20px;
+      right: 16px;
       top: 50%;
       transform: translateY(-50%);
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      pointer-events: all;
-      z-index: 20;
+      gap: 10px;
+      z-index: 30;
     }
 
     .element-btn {
-      width: 50px; height: 50px;
-      border-radius: 50%;
-      border: 2px solid;
+      width: 64px; height: 64px;
+      border-radius: 16px;
+      border: 3px solid;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .element-btn .el-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 7px;
+      letter-spacing: 1px;
+      margin-top: 2px;
+      text-transform: uppercase;
+      transition: color 0.25s ease;
+    }
+
+    .element-btn .el-status {
+      position: absolute;
+      top: -4px; right: -4px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #000;
+      transition: all 0.25s ease;
+      font-size: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(5px);
     }
 
-    .element-btn:hover { transform: scale(1.2); }
-    .element-btn.active { transform: scale(1.15); }
+    /* Inactive state (OFF) - clearly dimmed */
+    .element-btn {
+      opacity: 0.35;
+      border-color: #333;
+      box-shadow: none;
+      filter: grayscale(80%);
+    }
+    .element-btn .el-label { color: #555; }
+    .element-btn .el-status { background: #aa0000; }
+    .element-btn .el-status::after { content: ''; }
 
-    .element-btn.fire { border-color: #ff4400; box-shadow: 0 0 15px #ff440066; }
-    .element-btn.fire.active { box-shadow: 0 0 25px #ff4400aa, inset 0 0 15px #ff440044; }
-    .element-btn.ice { border-color: #00ccff; box-shadow: 0 0 15px #00ccff66; }
-    .element-btn.ice.active { box-shadow: 0 0 25px #00ccffaa, inset 0 0 15px #00ccff44; }
-    .element-btn.electric { border-color: #ffee00; box-shadow: 0 0 15px #ffee0066; }
-    .element-btn.electric.active { box-shadow: 0 0 25px #ffee00aa, inset 0 0 15px #ffee0044; }
-    .element-btn.water { border-color: #0066ff; box-shadow: 0 0 15px #0066ff66; }
-    .element-btn.water.active { box-shadow: 0 0 25px #0066ffaa, inset 0 0 15px #0066ff44; }
-    .element-btn.venom { border-color: #aa00ff; box-shadow: 0 0 15px #aa00ff66; }
-    .element-btn.venom.active { box-shadow: 0 0 25px #aa00ffaa, inset 0 0 15px #aa00ff44; }
+    /* Active state (ON) - vibrant glow */
+    .element-btn.active {
+      opacity: 1;
+      filter: grayscale(0%);
+      transform: scale(1.05);
+    }
+    .element-btn.active .el-status { background: #00dd44; }
+    .element-btn.active .el-status::after { content: ''; }
+
+    .element-btn:hover {
+      transform: scale(1.12);
+      opacity: 0.85;
+    }
+    .element-btn.active:hover {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+    .element-btn:active { transform: scale(0.95) !important; }
+
+    .element-btn.fire.active { border-color: #ff4400; box-shadow: 0 0 20px #ff4400aa, inset 0 0 12px #ff440033; }
+    .element-btn.fire.active .el-label { color: #ff6622; }
+    .element-btn.ice.active { border-color: #00ccff; box-shadow: 0 0 20px #00ccffaa, inset 0 0 12px #00ccff33; }
+    .element-btn.ice.active .el-label { color: #00ccff; }
+    .element-btn.electric.active { border-color: #ffee00; box-shadow: 0 0 20px #ffee00aa, inset 0 0 12px #ffee0033; }
+    .element-btn.electric.active .el-label { color: #ffee00; }
+    .element-btn.water.active { border-color: #0066ff; box-shadow: 0 0 20px #0066ffaa, inset 0 0 12px #0066ff33; }
+    .element-btn.water.active .el-label { color: #4488ff; }
+    .element-btn.venom.active { border-color: #aa00ff; box-shadow: 0 0 20px #aa00ffaa, inset 0 0 12px #aa00ff33; }
+    .element-btn.venom.active .el-label { color: #cc44ff; }
 
     .monster-counter {
       position: fixed;
@@ -251,8 +351,9 @@
     }
 
     @media (max-width: 600px) {
-      .element-selector { right: 8px; gap: 8px; }
-      .element-btn { width: 40px; height: 40px; font-size: 18px; }
+      .element-selector { right: 6px; gap: 6px; }
+      .element-btn { width: 52px; height: 52px; font-size: 18px; border-radius: 12px; }
+      .element-btn .el-label { font-size: 6px; }
       .controls { bottom: 20px; gap: 12px; }
       .btn { padding: 12px 24px; font-size: 10px; }
       .monster-counter { left: 8px; }
@@ -278,16 +379,36 @@
       <div class="counter-sub">vers l'espace</div>
     </div>
 
-    <div class="element-selector">
-      <div class="element-btn fire active" data-element="fire" title="Feu">&#128293;</div>
-      <div class="element-btn ice active" data-element="ice" title="Glace">&#10052;&#65039;</div>
-      <div class="element-btn electric active" data-element="electric" title="Electricite">&#9889;</div>
-      <div class="element-btn water active" data-element="water" title="Eau">&#128167;</div>
-      <div class="element-btn venom active" data-element="venom" title="Pics de Glace Venimeux">&#9760;&#65039;</div>
-    </div>
-
     <div class="address-badge">
       455 Avenue Argyle, Westmount, QC &bull; Protection Active 24/7
+    </div>
+  </div>
+
+  <div class="element-selector">
+    <div class="element-btn fire active" data-element="fire">
+      <span>&#128293;</span>
+      <span class="el-label">Feu</span>
+      <span class="el-status"></span>
+    </div>
+    <div class="element-btn ice active" data-element="ice">
+      <span>&#10052;&#65039;</span>
+      <span class="el-label">Glace</span>
+      <span class="el-status"></span>
+    </div>
+    <div class="element-btn electric active" data-element="electric">
+      <span>&#9889;</span>
+      <span class="el-label">Eclair</span>
+      <span class="el-status"></span>
+    </div>
+    <div class="element-btn water active" data-element="water">
+      <span>&#128167;</span>
+      <span class="el-label">Eau</span>
+      <span class="el-status"></span>
+    </div>
+    <div class="element-btn venom active" data-element="venom">
+      <span>&#9760;&#65039;</span>
+      <span class="el-label">Venin</span>
+      <span class="el-status"></span>
     </div>
   </div>
 
@@ -295,10 +416,15 @@
     <button class="btn btn-activate" id="btnActivate" onclick="activateBarrier()">
       Activer Bouclier
     </button>
+    <button class="btn btn-superboost" id="btnSuperBoost" onclick="triggerSuperBoost()">
+      SUPER BOOST
+    </button>
     <button class="btn btn-deactivate" id="btnDeactivate" onclick="deactivateBarrier()">
       Desactiver
     </button>
   </div>
+
+  <div class="boost-flash" id="boostFlash"></div>
 
   <script>
     // ===== CANVAS SETUP =====
@@ -309,6 +435,8 @@
     let monstersDefeated = 0;
     let activationProgress = 0;
     let shakeAmount = 0;
+    let superBoostActive = false;
+    let superBoostTimer = 0;
 
     const activeElements = { fire: true, ice: true, electric: true, water: true, venom: true };
 
@@ -558,15 +686,34 @@
     function drawBarrier(t) {
       if (activationProgress <= 0) return;
       const alpha = activationProgress;
+      const boostMult = superBoostActive ? 2.5 : 1;
 
       ctx.save();
+
+      // Super Boost: extra radial shockwave rings
+      if (superBoostActive) {
+        const boostPhase = (t % 800) / 800;
+        for (let w = 0; w < 3; w++) {
+          const wave = (boostPhase + w * 0.33) % 1;
+          const waveR = barrierRadius * (1 + wave * 0.5);
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY + 20, waveR, waveR * 0.55, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 200, 0, ${(1 - wave) * 0.4})`;
+          ctx.lineWidth = 3 * (1 - wave);
+          ctx.stroke();
+        }
+      }
+
       // Main barrier ellipse glow
       for (let i = 3; i >= 0; i--) {
-        const r = barrierRadius + i * 8;
+        const r = barrierRadius + i * 8 * boostMult;
         ctx.beginPath();
         ctx.ellipse(centerX, centerY + 20, r, r * 0.55, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0, 200, 255, ${alpha * 0.08 * (4 - i)})`;
-        ctx.lineWidth = 3 + i * 2;
+        const glowColor = superBoostActive
+          ? `rgba(255, ${150 + Math.sin(t * 0.01) * 100}, 0, ${alpha * 0.15 * (4 - i)})`
+          : `rgba(0, 200, 255, ${alpha * 0.08 * (4 - i)})`;
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = (3 + i * 2) * boostMult;
         ctx.stroke();
       }
 
@@ -1016,6 +1163,7 @@
       document.getElementById('shieldStatus').textContent = 'Bouclier Actif';
       document.getElementById('btnActivate').style.display = 'none';
       document.getElementById('btnDeactivate').style.display = 'block';
+      document.getElementById('btnSuperBoost').style.display = 'block';
 
       // Activation burst effect
       for (let i = 0; i < 50; i++) {
@@ -1028,25 +1176,136 @@
 
     function deactivateBarrier() {
       barrierActive = false;
+      superBoostActive = false;
       activationProgress = 0;
       document.getElementById('shieldStatus').className = 'shield-status inactive';
       document.getElementById('shieldStatus').textContent = 'Bouclier Inactif';
       document.getElementById('btnActivate').style.display = 'block';
       document.getElementById('btnDeactivate').style.display = 'none';
+      document.getElementById('btnSuperBoost').style.display = 'none';
+      document.getElementById('btnSuperBoost').classList.remove('boosting');
 
       // Remove all monsters
       monsters.length = 0;
     }
 
+    // ===== SUPER BOOST =====
+    function triggerSuperBoost() {
+      if (!barrierActive || superBoostActive) return;
+      superBoostActive = true;
+      superBoostTimer = 300; // ~5 seconds at 60fps
+      shakeAmount = 20;
+
+      // Force all elements ON
+      Object.keys(activeElements).forEach(el => {
+        activeElements[el] = true;
+      });
+      document.querySelectorAll('.element-btn').forEach(btn => btn.classList.add('active'));
+
+      // Visual feedback
+      document.getElementById('btnSuperBoost').classList.add('boosting');
+      document.getElementById('shieldStatus').textContent = 'SUPER BOOST!';
+      document.getElementById('shieldStatus').style.color = '#ffaa00';
+      document.getElementById('shieldStatus').style.borderColor = '#ffaa0088';
+      document.getElementById('shieldStatus').style.boxShadow = '0 0 40px #ffaa0066';
+
+      // Screen flash
+      const flash = document.getElementById('boostFlash');
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 200);
+
+      // Spawn a wave of monsters then instantly destroy them all
+      const boostMonsters = [];
+      for (let i = 0; i < 15; i++) {
+        const m = new Monster();
+        // Place them near the barrier
+        const angle = (i / 15) * Math.PI * 2;
+        const dist = barrierRadius + 60 + Math.random() * 80;
+        m.x = centerX + Math.cos(angle) * dist;
+        m.y = (centerY + 20) + Math.sin(angle) * dist * 0.55;
+        monsters.push(m);
+        boostMonsters.push(m);
+      }
+
+      // Massive barrier explosion - destroy all with staggered timing
+      boostMonsters.forEach((m, i) => {
+        setTimeout(() => {
+          if (m.state !== 'approaching') return;
+          m.state = 'hit';
+          m.hitTime = performance.now();
+          const angle = Math.atan2(m.y - (centerY + 20), m.x - centerX);
+          m.flyVx = Math.cos(angle) * (15 + Math.random() * 10);
+          m.flyVy = Math.sin(angle) * (15 + Math.random() * 10) - 12;
+          m.flyRotSpeed = (Math.random() - 0.5) * 0.5;
+          monstersDefeated++;
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          shakeAmount = Math.max(shakeAmount, 12);
+
+          // Extra large particle burst for boost kills
+          for (let j = 0; j < 30; j++) {
+            impactParticles.push(new ImpactParticle(
+              m.x + (Math.random() - 0.5) * 30,
+              m.y + (Math.random() - 0.5) * 30,
+              ['rgba(255,0,100,1)', 'rgba(255,150,0,1)', 'rgba(255,255,0,1)', 'rgba(0,255,136,1)', 'rgba(0,200,255,1)', 'rgba(170,0,255,1)'][Math.floor(Math.random() * 6)]
+            ));
+          }
+          spaceTexts.push(new SpaceText(m.x, m.y - 30));
+
+          // Massive projectile barrage
+          const bAngle = angle;
+          for (let p = 0; p < 3; p++) {
+            const el = ['fire', 'ice', 'electric', 'water', 'venom'][Math.floor(Math.random() * 5)];
+            const bx = centerX + Math.cos(bAngle) * barrierRadius * 0.9;
+            const by = (centerY + 20) + Math.sin(bAngle) * barrierRadius * 0.55 * 0.9;
+            projectiles.push(new Projectile(bx, by, m.x, m.y, el));
+          }
+        }, i * 100);
+      });
+
+      // Boost duration
+      setTimeout(() => {
+        superBoostActive = false;
+        document.getElementById('btnSuperBoost').classList.remove('boosting');
+        document.getElementById('shieldStatus').textContent = 'Bouclier Actif';
+        document.getElementById('shieldStatus').style.color = '';
+        document.getElementById('shieldStatus').style.borderColor = '';
+        document.getElementById('shieldStatus').style.boxShadow = '';
+      }, 5000);
+    }
+
     // Initial button state
     document.getElementById('btnDeactivate').style.display = 'none';
+    document.getElementById('btnSuperBoost').style.display = 'none';
 
-    // Element selector
+    // Element selector - click handler with sound feedback
+    function playToggleSound(on) {
+      initAudio();
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      if (on) {
+        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+      } else {
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+      }
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.15);
+    }
+
     document.querySelectorAll('.element-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const el = btn.dataset.element;
         activeElements[el] = !activeElements[el];
         btn.classList.toggle('active');
+        playToggleSound(activeElements[el]);
       });
     });
 
@@ -1333,6 +1592,54 @@
     spawnProjectiles = function(tx, ty, angle) {
       origSpawnProjectiles(tx, ty, angle);
       playImpactSound();
+    };
+
+    // Super boost sound
+    function playSuperBoostSound() {
+      initAudio();
+      if (!audioCtx) return;
+      // Rising power chord
+      [200, 300, 400, 500, 700, 900, 1200].forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = i < 3 ? 'sawtooth' : 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.08);
+        osc.frequency.exponentialRampToValueAtTime(freq * 2, audioCtx.currentTime + i * 0.08 + 0.3);
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.08 + 0.5);
+        osc.start(audioCtx.currentTime + i * 0.08);
+        osc.stop(audioCtx.currentTime + i * 0.08 + 0.5);
+      });
+      // Big boom
+      const bufferSize = audioCtx.sampleRate * 0.5;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2) * 0.5;
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      const nGain = audioCtx.createGain();
+      const nFilter = audioCtx.createBiquadFilter();
+      nFilter.type = 'lowpass';
+      nFilter.frequency.value = 300;
+      noise.connect(nFilter);
+      nFilter.connect(nGain);
+      nGain.connect(audioCtx.destination);
+      nGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      nGain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.3);
+      nGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+      noise.start(audioCtx.currentTime + 0.3);
+    }
+
+    // Patch super boost with sound
+    const origTriggerSuperBoost = triggerSuperBoost;
+    triggerSuperBoost = function() {
+      origTriggerSuperBoost();
+      playSuperBoostSound();
     };
 
     // First click to enable audio context
