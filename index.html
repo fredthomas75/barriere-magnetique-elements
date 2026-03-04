@@ -782,19 +782,66 @@
 
     // ===== MONSTERS =====
     const monsters = [];
-    const monsterTypes = [
-      { color: '#8B0000', eyeColor: '#ffff00', name: 'Shadow', size: 35 },
-      { color: '#4B0082', eyeColor: '#ff0000', name: 'Phantom', size: 40 },
-      { color: '#2F4F2F', eyeColor: '#00ff00', name: 'Ghoul', size: 30 },
-      { color: '#3B0B0B', eyeColor: '#ff8800', name: 'Demon', size: 45 },
-      { color: '#1a1a3a', eyeColor: '#cc00ff', name: 'Wraith', size: 38 }
+    // ===== MONSTER VARIETY SYSTEM =====
+    // Body shapes: blob, tall, wide, spiky, ghost, spider, cyclops, bat, slug, squid
+    const bodyShapes = ['blob', 'tall', 'wide', 'spiky', 'ghost', 'spider', 'cyclops', 'bat', 'slug', 'squid'];
+    const headFeatures = ['horns', 'antennae', 'crown', 'spikes', 'ears', 'none', 'single_horn', 'mushroom'];
+    const eyeStyles = ['round', 'angry', 'tiny', 'big', 'vertical', 'three', 'one_big', 'stalks'];
+    const mouthStyles = ['teeth', 'fangs', 'wide_grin', 'beak', 'tentacle_mouth', 'drool', 'none', 'zigzag'];
+    const limbStyles = ['tentacles', 'claws', 'stubs', 'wings', 'spider_legs', 'ghost_trail', 'none', 'long_arms'];
+    const patterns = ['solid', 'spots', 'stripes', 'gradient', 'cracks', 'glow_veins'];
+
+    const colorPalettes = [
+      { body: '#8B0000', accent: '#cc2200', eye: '#ffff00', glow: '#ff440088' },
+      { body: '#4B0082', accent: '#7722cc', eye: '#ff0000', glow: '#aa00ff88' },
+      { body: '#2F4F2F', accent: '#447744', eye: '#00ff00', glow: '#22aa2288' },
+      { body: '#3B0B0B', accent: '#661111', eye: '#ff8800', glow: '#ff440088' },
+      { body: '#1a1a3a', accent: '#3333aa', eye: '#cc00ff', glow: '#6600cc88' },
+      { body: '#2a0a2a', accent: '#880066', eye: '#ff00aa', glow: '#ff00aa88' },
+      { body: '#0a2a2a', accent: '#006666', eye: '#00ffcc', glow: '#00ffcc88' },
+      { body: '#3a2a0a', accent: '#886600', eye: '#ffcc00', glow: '#ffcc0088' },
+      { body: '#1a0a0a', accent: '#440000', eye: '#ff2200', glow: '#ff000088' },
+      { body: '#0a0a2a', accent: '#0022aa', eye: '#4488ff', glow: '#0044ff88' },
+      { body: '#2a0a1a', accent: '#770033', eye: '#ff4488', glow: '#ff448888' },
+      { body: '#1a2a0a', accent: '#446600', eye: '#aaff00', glow: '#88cc0088' },
     ];
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
     class Monster {
       constructor() {
-        const type = monsterTypes[Math.floor(Math.random() * monsterTypes.length)];
-        Object.assign(this, type);
         this.id = Math.random();
+        this.palette = pick(colorPalettes);
+        this.color = this.palette.body;
+        this.accent = this.palette.accent;
+        this.eyeColor = this.palette.eye;
+        this.glowColor = this.palette.glow;
+
+        // Randomized traits
+        this.bodyShape = pick(bodyShapes);
+        this.headFeature = pick(headFeatures);
+        this.eyeStyle = pick(eyeStyles);
+        this.mouthStyle = pick(mouthStyles);
+        this.limbStyle = pick(limbStyles);
+        this.pattern = pick(patterns);
+
+        // Size depends on body shape
+        const baseSizes = { blob: 32, tall: 28, wide: 35, spiky: 30, ghost: 34, spider: 26, cyclops: 38, bat: 25, slug: 30, squid: 32 };
+        this.size = (baseSizes[this.bodyShape] || 32) + Math.random() * 12 - 6;
+
+        this.eyeCount = this.eyeStyle === 'three' ? 3 : (this.eyeStyle === 'one_big' || this.bodyShape === 'cyclops') ? 1 : 2;
+        this.tentacles = this.limbStyle === 'tentacles' ? Math.floor(Math.random() * 3) + 3 :
+                         this.limbStyle === 'spider_legs' ? 6 :
+                         this.limbStyle === 'long_arms' ? 2 : Math.floor(Math.random() * 3) + 2;
+        this.hornSize = Math.random() * 15 + 5;
+        this.teethCount = Math.floor(Math.random() * 4) + 3;
+
+        // Unique variation seeds
+        this.blobSeed = Array.from({length: 12}, () => Math.random() * 6 - 3);
+        this.wobbleAmp = Math.random() * 3 + 1;
+        this.pulseSpeed = Math.random() * 0.003 + 0.002;
+        this.scaleY = this.bodyShape === 'tall' ? 1.4 : this.bodyShape === 'wide' ? 0.7 : 1;
+        this.scaleX = this.bodyShape === 'wide' ? 1.4 : this.bodyShape === 'tall' ? 0.75 : 1;
 
         // Spawn from edges
         const side = Math.floor(Math.random() * 4);
@@ -804,18 +851,18 @@
         else { this.x = Math.random() * W; this.y = H + 50; }
 
         this.speed = Math.random() * 0.5 + 0.3;
+        if (this.bodyShape === 'slug') this.speed *= 0.6;
+        if (this.bodyShape === 'bat') this.speed *= 1.4;
         this.wobble = Math.random() * Math.PI * 2;
         this.wobbleSpeed = Math.random() * 0.02 + 0.01;
-        this.state = 'approaching'; // approaching, hit, flying
+        this.state = 'approaching';
         this.hitTime = 0;
         this.flyVx = 0;
         this.flyVy = 0;
         this.flyRotation = 0;
         this.flyRotSpeed = 0;
         this.opacity = 1;
-        this.mouthOpen = Math.random() * Math.PI;
-        this.tentacles = Math.floor(Math.random() * 4) + 2;
-        this.hornSize = Math.random() * 15 + 5;
+        this.mouthPhase = Math.random() * Math.PI;
       }
 
       update(t) {
@@ -823,16 +870,14 @@
           const dx = centerX - this.x;
           const dy = (centerY + 20) - this.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const adjustedDist = Math.sqrt(dx * dx + (dy / 0.55) * (dy / 0.55));
 
           this.wobble += this.wobbleSpeed;
-          const wobbleX = Math.sin(this.wobble) * 2;
-          const wobbleY = Math.cos(this.wobble * 1.3) * 2;
+          const wobbleX = Math.sin(this.wobble) * this.wobbleAmp;
+          const wobbleY = Math.cos(this.wobble * 1.3) * this.wobbleAmp;
 
           this.x += (dx / dist) * this.speed + wobbleX * 0.3;
           this.y += (dy / dist) * this.speed + wobbleY * 0.3;
 
-          // Check barrier collision
           const bx = this.x - centerX;
           const by = (this.y - (centerY + 20)) / 0.55;
           const barrierDist = Math.sqrt(bx * bx + by * by);
@@ -847,14 +892,11 @@
             monstersDefeated++;
             document.getElementById('monsterCount').textContent = monstersDefeated;
             shakeAmount = 8;
-
-            // Spawn projectiles toward monster
             spawnProjectiles(this.x, this.y, angle);
           }
         } else if (this.state === 'hit') {
           const elapsed = (t - this.hitTime) / 1000;
           if (elapsed < 0.5) {
-            // Brief impact freeze with shake
             this.opacity = 1 - elapsed;
           } else {
             this.state = 'flying';
@@ -862,7 +904,7 @@
         } else if (this.state === 'flying') {
           this.x += this.flyVx;
           this.y += this.flyVy;
-          this.flyVy -= 0.15; // Fly upward toward space
+          this.flyVy -= 0.15;
           this.flyRotation += this.flyRotSpeed;
           this.opacity -= 0.008;
           this.size *= 0.998;
@@ -876,100 +918,594 @@
         ctx.rotate(this.flyRotation);
         ctx.globalAlpha = this.opacity;
 
-        // Body
-        const bodyPulse = 1 + Math.sin(t * 0.005 + this.id * 10) * 0.05;
-        const s = this.size * bodyPulse;
+        const pulse = 1 + Math.sin(t * this.pulseSpeed + this.id * 10) * 0.05;
+        const s = this.size * pulse;
 
         // Shadow/glow
-        ctx.shadowColor = this.state === 'hit' ? 'rgba(255,255,255,0.8)' : `${this.color}88`;
+        ctx.shadowColor = this.state === 'hit' ? 'rgba(255,255,255,0.8)' : this.glowColor;
         ctx.shadowBlur = this.state === 'hit' ? 30 : 15;
 
-        // Main body (blobby shape)
-        ctx.beginPath();
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
-          const wobble = Math.sin(t * 0.003 + a * 3 + this.id) * 3;
-          const r = s + wobble;
-          const px = Math.cos(a) * r;
-          const py = Math.sin(a) * r;
-          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, s);
-        grad.addColorStop(0, this.color);
-        grad.addColorStop(1, '#000000');
-        ctx.fillStyle = grad;
-        ctx.fill();
+        // ===== DRAW BODY =====
+        ctx.save();
+        ctx.scale(this.scaleX, this.scaleY);
+        this._drawBody(t, s);
+        ctx.restore();
+
         ctx.shadowBlur = 0;
 
-        // Horns
-        ctx.fillStyle = '#1a1a1a';
-        [-0.6, 0.6].forEach(side => {
-          ctx.beginPath();
-          ctx.moveTo(side * s * 0.5, -s * 0.6);
-          ctx.lineTo(side * s * 0.3, -s - this.hornSize);
-          ctx.lineTo(side * s * 0.7, -s * 0.4);
-          ctx.closePath();
-          ctx.fill();
-        });
+        // ===== DRAW PATTERN =====
+        this._drawPattern(t, s);
 
-        // Eyes
-        const eyeY = -s * 0.15;
-        [-1, 1].forEach(side => {
-          const eyeX = side * s * 0.3;
-          // Eye glow
-          ctx.shadowColor = this.eyeColor;
-          ctx.shadowBlur = 12;
-          ctx.beginPath();
-          ctx.arc(eyeX, eyeY, s * 0.18, 0, Math.PI * 2);
-          ctx.fillStyle = this.eyeColor;
-          ctx.fill();
-          // Pupil
-          ctx.shadowBlur = 0;
-          ctx.beginPath();
-          const lookX = (centerX - this.x) * 0.001;
-          const lookY = ((centerY + 20) - this.y) * 0.001;
-          ctx.arc(eyeX + lookX * 3, eyeY + lookY * 3, s * 0.08, 0, Math.PI * 2);
-          ctx.fillStyle = '#000';
-          ctx.fill();
-        });
+        // ===== DRAW HEAD FEATURES =====
+        this._drawHeadFeature(t, s);
 
-        // Mouth
-        const mouthOpen = Math.abs(Math.sin(t * 0.004 + this.mouthOpen)) * s * 0.2;
-        ctx.beginPath();
-        ctx.ellipse(0, s * 0.25, s * 0.25, mouthOpen, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#000';
-        ctx.fill();
-        // Teeth
-        if (mouthOpen > 3) {
-          ctx.fillStyle = '#ddd';
-          for (let ti = -2; ti <= 2; ti++) {
-            ctx.beginPath();
-            ctx.moveTo(ti * s * 0.1 - 3, s * 0.25 - mouthOpen + 2);
-            ctx.lineTo(ti * s * 0.1, s * 0.25 - mouthOpen + 8);
-            ctx.lineTo(ti * s * 0.1 + 3, s * 0.25 - mouthOpen + 2);
-            ctx.closePath();
-            ctx.fill();
-          }
-        }
+        // ===== DRAW EYES =====
+        this._drawEyes(t, s);
 
-        // Tentacles / arms
-        for (let i = 0; i < this.tentacles; i++) {
-          const ta = (i / this.tentacles) * Math.PI + Math.PI / 2;
-          const tx = Math.cos(ta) * s;
-          const ty = Math.sin(ta) * s * 0.3 + s * 0.4;
-          const wave = Math.sin(t * 0.005 + i * 2) * 15;
-          ctx.beginPath();
-          ctx.moveTo(tx * 0.5, ty);
-          ctx.quadraticCurveTo(tx + wave, ty + s * 0.3, tx * 0.8 + wave * 1.5, ty + s * 0.6);
-          ctx.strokeStyle = this.color;
-          ctx.lineWidth = 4;
-          ctx.lineCap = 'round';
-          ctx.stroke();
-        }
+        // ===== DRAW MOUTH =====
+        this._drawMouth(t, s);
+
+        // ===== DRAW LIMBS =====
+        this._drawLimbs(t, s);
 
         ctx.globalAlpha = 1;
         ctx.restore();
+      }
+
+      _drawBody(t, s) {
+        ctx.beginPath();
+        if (this.bodyShape === 'ghost') {
+          // Ghost: round top, wavy bottom
+          ctx.moveTo(-s, 0);
+          ctx.arc(0, -s * 0.3, s, Math.PI, 0);
+          for (let i = 0; i <= 5; i++) {
+            const gx = s - (i / 5) * s * 2;
+            const gy = s * 0.5 + Math.sin(t * 0.005 + i + this.id) * s * 0.2;
+            ctx.lineTo(gx, gy);
+          }
+          ctx.closePath();
+        } else if (this.bodyShape === 'spiky') {
+          // Spiky: star-like body
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2;
+            const r = i % 2 === 0 ? s * 1.3 : s * 0.7;
+            const wobble = Math.sin(t * 0.004 + a * 2 + this.id) * 2;
+            ctx.lineTo(Math.cos(a) * (r + wobble), Math.sin(a) * (r + wobble));
+          }
+          ctx.closePath();
+        } else if (this.bodyShape === 'slug') {
+          // Slug: elongated horizontal blob
+          ctx.ellipse(0, 0, s * 1.5, s * 0.7, 0, 0, Math.PI * 2);
+        } else if (this.bodyShape === 'squid') {
+          // Squid: dome top, narrow bottom
+          ctx.arc(0, -s * 0.2, s * 0.9, Math.PI, 0);
+          ctx.lineTo(s * 0.3, s * 0.6);
+          ctx.lineTo(0, s * 0.5);
+          ctx.lineTo(-s * 0.3, s * 0.6);
+          ctx.closePath();
+        } else {
+          // Default blob with unique deformations
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            const wobble = Math.sin(t * 0.003 + a * 3 + this.id) * this.wobbleAmp + this.blobSeed[i];
+            const r = s + wobble;
+            ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+          }
+          ctx.closePath();
+        }
+        const grad = ctx.createRadialGradient(0, -s * 0.2, 0, 0, 0, s * 1.3);
+        grad.addColorStop(0, this.accent);
+        grad.addColorStop(0.6, this.color);
+        grad.addColorStop(1, '#000000');
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+
+      _drawPattern(t, s) {
+        if (this.pattern === 'spots') {
+          ctx.fillStyle = this.accent + '66';
+          for (let i = 0; i < 5; i++) {
+            const sx = Math.cos(this.id * 100 + i * 2.3) * s * 0.5;
+            const sy = Math.sin(this.id * 100 + i * 3.1) * s * 0.5;
+            ctx.beginPath();
+            ctx.arc(sx, sy, s * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (this.pattern === 'stripes') {
+          ctx.strokeStyle = this.accent + '44';
+          ctx.lineWidth = 2;
+          for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-s, i * s * 0.25);
+            ctx.lineTo(s, i * s * 0.25);
+            ctx.stroke();
+          }
+        } else if (this.pattern === 'cracks') {
+          ctx.strokeStyle = this.eyeColor + '33';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            let cx = (Math.random() - 0.5) * s;
+            let cy = (Math.random() - 0.5) * s;
+            ctx.moveTo(cx, cy);
+            for (let j = 0; j < 3; j++) {
+              cx += (Math.random() - 0.5) * s * 0.4;
+              cy += (Math.random() - 0.5) * s * 0.4;
+              ctx.lineTo(cx, cy);
+            }
+            ctx.stroke();
+          }
+        } else if (this.pattern === 'glow_veins') {
+          ctx.strokeStyle = this.eyeColor + '44';
+          ctx.lineWidth = 1.5;
+          ctx.shadowColor = this.eyeColor;
+          ctx.shadowBlur = 6;
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            const a = (this.id * 100 + i * 2) % (Math.PI * 2);
+            const ex = Math.cos(a) * s * 0.8;
+            const ey = Math.sin(a) * s * 0.8;
+            const mx = ex * 0.5 + Math.sin(t * 0.003 + i) * 5;
+            const my = ey * 0.5 + Math.cos(t * 0.003 + i) * 5;
+            ctx.quadraticCurveTo(mx, my, ex, ey);
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      _drawHeadFeature(t, s) {
+        const f = this.headFeature;
+        ctx.fillStyle = '#1a1a1a';
+
+        if (f === 'horns') {
+          [-0.5, 0.5].forEach(side => {
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.5, -s * 0.6 * this.scaleY);
+            ctx.lineTo(side * s * 0.2, -s * this.scaleY - this.hornSize);
+            ctx.lineTo(side * s * 0.7, -s * 0.4 * this.scaleY);
+            ctx.closePath();
+            ctx.fill();
+          });
+        } else if (f === 'antennae') {
+          ctx.strokeStyle = this.accent;
+          ctx.lineWidth = 2;
+          [-0.3, 0.3].forEach(side => {
+            const bx = side * s * 0.4;
+            const by = -s * 0.7 * this.scaleY;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            const tipX = bx + side * 15;
+            const tipY = by - 20 + Math.sin(t * 0.006 + side * 5) * 5;
+            ctx.quadraticCurveTo(bx + side * 5, by - 15, tipX, tipY);
+            ctx.stroke();
+            // Bulb at tip
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
+            ctx.fillStyle = this.eyeColor;
+            ctx.shadowColor = this.eyeColor;
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          });
+        } else if (f === 'crown') {
+          ctx.fillStyle = this.accent;
+          const crownY = -s * 0.7 * this.scaleY;
+          for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * s * 0.2 - 4, crownY + 5);
+            ctx.lineTo(i * s * 0.2, crownY - 10 - Math.abs(i) * 3);
+            ctx.lineTo(i * s * 0.2 + 4, crownY + 5);
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else if (f === 'spikes') {
+          ctx.fillStyle = this.accent;
+          for (let i = 0; i < 5; i++) {
+            const a = -Math.PI * 0.8 + (i / 4) * Math.PI * 0.6;
+            const bx = Math.cos(a) * s * 0.6;
+            const by = Math.sin(a) * s * 0.6 * this.scaleY;
+            ctx.beginPath();
+            ctx.moveTo(bx - 3, by);
+            ctx.lineTo(bx + Math.cos(a) * 12, by + Math.sin(a) * 12);
+            ctx.lineTo(bx + 3, by);
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else if (f === 'ears') {
+          ctx.fillStyle = this.color;
+          [-1, 1].forEach(side => {
+            ctx.beginPath();
+            const ex = side * s * 0.7;
+            const ey = -s * 0.4 * this.scaleY;
+            ctx.ellipse(ex, ey, s * 0.2, s * 0.35, side * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          });
+        } else if (f === 'single_horn') {
+          ctx.fillStyle = '#2a2a2a';
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.1, -s * 0.6 * this.scaleY);
+          ctx.lineTo(0, -s * this.scaleY - this.hornSize * 1.5);
+          ctx.lineTo(s * 0.1, -s * 0.6 * this.scaleY);
+          ctx.closePath();
+          ctx.fill();
+          // Glow tip
+          ctx.beginPath();
+          ctx.arc(0, -s * this.scaleY - this.hornSize * 1.5, 3, 0, Math.PI * 2);
+          ctx.fillStyle = this.eyeColor;
+          ctx.shadowColor = this.eyeColor;
+          ctx.shadowBlur = 10;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        } else if (f === 'mushroom') {
+          ctx.fillStyle = this.accent;
+          ctx.beginPath();
+          ctx.arc(0, -s * 0.6 * this.scaleY, s * 0.7, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          // Spots on mushroom
+          ctx.fillStyle = this.eyeColor + '44';
+          [-0.3, 0.1, 0.35].forEach(ox => {
+            ctx.beginPath();
+            ctx.arc(ox * s, -s * 0.75 * this.scaleY, 4, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+      }
+
+      _drawEyes(t, s) {
+        const lookX = (centerX - this.x) * 0.001;
+        const lookY = ((centerY + 20) - this.y) * 0.001;
+
+        if (this.eyeStyle === 'one_big' || this.bodyShape === 'cyclops') {
+          // Single large eye
+          const ey = -s * 0.1;
+          ctx.shadowColor = this.eyeColor;
+          ctx.shadowBlur = 15;
+          ctx.beginPath();
+          ctx.arc(0, ey, s * 0.3, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(0, ey, s * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = this.eyeColor;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.arc(lookX * 4, ey + lookY * 4, s * 0.12, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          // Highlight
+          ctx.beginPath();
+          ctx.arc(-s * 0.08, ey - s * 0.08, s * 0.05, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.fill();
+        } else if (this.eyeStyle === 'stalks') {
+          [-1, 1].forEach(side => {
+            const stalkAngle = side * 0.4 + Math.sin(t * 0.003 + side) * 0.1;
+            const stalkLen = s * 0.6;
+            const sx = Math.sin(stalkAngle) * stalkLen * side;
+            const sy = -s * 0.3 - Math.cos(stalkAngle) * stalkLen;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.15, -s * 0.3);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+            ctx.shadowColor = this.eyeColor;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(sx, sy, s * 0.12, 0, Math.PI * 2);
+            ctx.fillStyle = this.eyeColor;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(sx + lookX * 2, sy + lookY * 2, s * 0.05, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+          });
+        } else if (this.eyeStyle === 'three') {
+          [-1, 0, 1].forEach(pos => {
+            const ex = pos * s * 0.25;
+            const ey = -s * 0.15 + (pos === 0 ? -s * 0.1 : 0);
+            const er = pos === 0 ? s * 0.14 : s * 0.12;
+            ctx.shadowColor = this.eyeColor;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(ex, ey, er, 0, Math.PI * 2);
+            ctx.fillStyle = this.eyeColor;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(ex + lookX * 2, ey + lookY * 2, er * 0.45, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+          });
+        } else {
+          // Two eyes with style variations
+          [-1, 1].forEach(side => {
+            const ex = side * s * 0.3;
+            const ey = -s * 0.15;
+            const er = this.eyeStyle === 'big' ? s * 0.22 : this.eyeStyle === 'tiny' ? s * 0.1 : s * 0.16;
+
+            ctx.shadowColor = this.eyeColor;
+            ctx.shadowBlur = 12;
+
+            if (this.eyeStyle === 'angry') {
+              // Angry slanted eye
+              ctx.beginPath();
+              ctx.ellipse(ex, ey, er, er * 0.7, side * 0.3, 0, Math.PI * 2);
+              ctx.fillStyle = this.eyeColor;
+              ctx.fill();
+              // Angry brow
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.moveTo(ex - side * er, ey - er * 0.8);
+              ctx.lineTo(ex + side * er * 0.5, ey - er * 1.2);
+              ctx.stroke();
+            } else if (this.eyeStyle === 'vertical') {
+              ctx.beginPath();
+              ctx.ellipse(ex, ey, er * 0.7, er, 0, 0, Math.PI * 2);
+              ctx.fillStyle = this.eyeColor;
+              ctx.fill();
+            } else {
+              ctx.beginPath();
+              ctx.arc(ex, ey, er, 0, Math.PI * 2);
+              ctx.fillStyle = this.eyeColor;
+              ctx.fill();
+            }
+
+            // Pupil
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            const pr = this.eyeStyle === 'vertical' ? er * 0.3 : er * 0.45;
+            ctx.arc(ex + lookX * 3, ey + lookY * 3, pr, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+
+            // Highlight
+            if (this.eyeStyle === 'big') {
+              ctx.beginPath();
+              ctx.arc(ex - er * 0.25, ey - er * 0.25, er * 0.15, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255,255,255,0.6)';
+              ctx.fill();
+            }
+          });
+        }
+      }
+
+      _drawMouth(t, s) {
+        const mouthOpen = Math.abs(Math.sin(t * 0.004 + this.mouthPhase)) * s * 0.2;
+        const m = this.mouthStyle;
+
+        if (m === 'none') return;
+
+        const my = s * 0.25;
+
+        if (m === 'wide_grin') {
+          ctx.beginPath();
+          ctx.arc(0, my - s * 0.05, s * 0.35, 0.1, Math.PI - 0.1);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          // Teeth along the grin
+          ctx.fillStyle = '#ddd';
+          for (let ti = -3; ti <= 3; ti++) {
+            ctx.beginPath();
+            const tx = ti * s * 0.08;
+            ctx.moveTo(tx - 2, my - s * 0.05);
+            ctx.lineTo(tx, my + 5);
+            ctx.lineTo(tx + 2, my - s * 0.05);
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else if (m === 'fangs') {
+          ctx.beginPath();
+          ctx.ellipse(0, my, s * 0.2, mouthOpen + 2, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#200000';
+          ctx.fill();
+          // Two big fangs
+          ctx.fillStyle = '#eee';
+          [-1, 1].forEach(side => {
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.12 - 3, my - mouthOpen);
+            ctx.lineTo(side * s * 0.12, my + mouthOpen + 6);
+            ctx.lineTo(side * s * 0.12 + 3, my - mouthOpen);
+            ctx.closePath();
+            ctx.fill();
+          });
+        } else if (m === 'beak') {
+          ctx.fillStyle = '#2a2000';
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.15, my - 3);
+          ctx.lineTo(0, my + s * 0.2);
+          ctx.lineTo(s * 0.15, my - 3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#3a3010';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.15, my - 1);
+          ctx.lineTo(s * 0.15, my - 1);
+          ctx.stroke();
+        } else if (m === 'tentacle_mouth') {
+          for (let i = 0; i < 4; i++) {
+            const ta = -0.5 + (i / 3);
+            const wave = Math.sin(t * 0.006 + i * 1.5 + this.id) * 8;
+            ctx.beginPath();
+            ctx.moveTo(ta * s * 0.3, my);
+            ctx.quadraticCurveTo(ta * s * 0.4 + wave, my + s * 0.3, ta * s * 0.2 + wave * 0.5, my + s * 0.5);
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+        } else if (m === 'drool') {
+          ctx.beginPath();
+          ctx.ellipse(0, my, s * 0.2, mouthOpen + 2, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          // Drool drops
+          ctx.fillStyle = '#44aa44';
+          const drip = (t * 0.002 + this.id * 10) % 1;
+          ctx.beginPath();
+          ctx.ellipse(s * 0.05, my + mouthOpen + drip * s * 0.4, 3, 4 + drip * 3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (m === 'zigzag') {
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.3, my);
+          for (let i = 0; i <= 6; i++) {
+            ctx.lineTo(-s * 0.3 + i * s * 0.1, my + (i % 2 === 0 ? -3 : 5));
+          }
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          // Default teeth
+          ctx.beginPath();
+          ctx.ellipse(0, my, s * 0.22, mouthOpen + 1, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          if (mouthOpen > 3) {
+            ctx.fillStyle = '#ddd';
+            for (let ti = 0; ti < this.teethCount; ti++) {
+              const tx = -s * 0.15 + (ti / (this.teethCount - 1)) * s * 0.3;
+              ctx.beginPath();
+              ctx.moveTo(tx - 2, my - mouthOpen + 2);
+              ctx.lineTo(tx, my - mouthOpen + 7);
+              ctx.lineTo(tx + 2, my - mouthOpen + 2);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
+      }
+
+      _drawLimbs(t, s) {
+        const l = this.limbStyle;
+
+        if (l === 'none') return;
+
+        if (l === 'wings') {
+          [-1, 1].forEach(side => {
+            ctx.fillStyle = this.color + 'aa';
+            ctx.beginPath();
+            const wx = side * s * 0.5;
+            const flapAmt = Math.sin(t * 0.008 + this.id) * 0.3;
+            ctx.moveTo(wx, -s * 0.1);
+            ctx.quadraticCurveTo(wx + side * s * 1.2, -s * 0.5 + flapAmt * s, wx + side * s * 1.0, s * 0.1);
+            ctx.quadraticCurveTo(wx + side * s * 0.6, s * 0.2, wx, s * 0.2);
+            ctx.closePath();
+            ctx.fill();
+            // Wing bone
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(wx, 0);
+            ctx.lineTo(wx + side * s * 0.9, -s * 0.3 + flapAmt * s * 0.5);
+            ctx.stroke();
+          });
+        } else if (l === 'spider_legs') {
+          for (let i = 0; i < 6; i++) {
+            const side = i < 3 ? -1 : 1;
+            const idx = i % 3;
+            const baseY = -s * 0.2 + idx * s * 0.25;
+            const wave = Math.sin(t * 0.005 + i * 1.2 + this.id) * 8;
+            const kneeX = side * (s * 0.8 + wave * 0.5);
+            const kneeY = baseY - 10;
+            const footX = side * (s * 1.2 + wave);
+            const footY = baseY + s * 0.4;
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.3, baseY);
+            ctx.lineTo(kneeX, kneeY);
+            ctx.lineTo(footX, footY);
+            ctx.stroke();
+          }
+        } else if (l === 'claws') {
+          [-1, 1].forEach(side => {
+            const ax = side * s * 0.6;
+            const ay = s * 0.1;
+            const wave = Math.sin(t * 0.004 + side * 3 + this.id) * 10;
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.4, ay);
+            ctx.quadraticCurveTo(ax + wave, ay + s * 0.2, ax + side * 8 + wave, ay + s * 0.5);
+            ctx.stroke();
+            // Claw tips
+            for (let c = 0; c < 3; c++) {
+              const ca = -0.3 + c * 0.3;
+              ctx.beginPath();
+              ctx.moveTo(ax + side * 8 + wave, ay + s * 0.5);
+              ctx.lineTo(ax + side * 8 + wave + Math.cos(ca) * 8 * side, ay + s * 0.5 + Math.sin(ca) * 8 + 5);
+              ctx.strokeStyle = '#1a1a1a';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
+          });
+        } else if (l === 'stubs') {
+          [-1, 1].forEach(side => {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            const sx = side * s * 0.45;
+            const sy = s * 0.3;
+            ctx.ellipse(sx, sy, s * 0.15, s * 0.25, side * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        } else if (l === 'ghost_trail') {
+          ctx.fillStyle = this.color + '44';
+          for (let i = 1; i <= 4; i++) {
+            ctx.beginPath();
+            ctx.ellipse(0, s * 0.3 + i * 8, s * (1 - i * 0.15), s * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (l === 'long_arms') {
+          [-1, 1].forEach(side => {
+            const wave = Math.sin(t * 0.003 + side * 4 + this.id) * 15;
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(side * s * 0.4, 0);
+            ctx.quadraticCurveTo(side * s * 1.0 + wave, s * 0.1, side * s * 0.8 + wave * 1.5, s * 0.8);
+            ctx.stroke();
+            // Hand with fingers
+            const hx = side * s * 0.8 + wave * 1.5;
+            const hy = s * 0.8;
+            for (let f = 0; f < 3; f++) {
+              const fa = -0.4 + f * 0.4;
+              ctx.beginPath();
+              ctx.moveTo(hx, hy);
+              ctx.lineTo(hx + Math.cos(fa + Math.PI / 2) * 8 * side, hy + Math.sin(fa + Math.PI / 2) * 8);
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
+          });
+        } else {
+          // Default tentacles
+          for (let i = 0; i < this.tentacles; i++) {
+            const ta = (i / this.tentacles) * Math.PI + Math.PI / 2;
+            const tx = Math.cos(ta) * s;
+            const ty = Math.sin(ta) * s * 0.3 + s * 0.4;
+            const wave = Math.sin(t * 0.005 + i * 2 + this.id) * 15;
+            ctx.beginPath();
+            ctx.moveTo(tx * 0.5, ty);
+            ctx.quadraticCurveTo(tx + wave, ty + s * 0.3, tx * 0.8 + wave * 1.5, ty + s * 0.6);
+            ctx.strokeStyle = this.accent;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+        }
       }
     }
 
