@@ -180,6 +180,30 @@
       50% { transform: scale(1.15); }
     }
 
+    .btn-metalwave {
+      background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
+      background-size: 400% 400%;
+      color: #1a1a2e;
+      font-size: clamp(10px, 1.8vw, 13px);
+      text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+      box-shadow: 0 0 25px rgba(192,192,192,0.4), 0 0 50px rgba(255,170,0,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: metalShine 3s ease infinite;
+      display: none;
+    }
+    .btn-metalwave:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px rgba(192,192,192,0.6), 0 0 70px rgba(255,170,0,0.4);
+    }
+    .btn-metalwave:active { transform: scale(0.95); }
+    .btn-metalwave.active-wave {
+      animation: metalShine 0.4s ease infinite, boostPulse 0.2s ease infinite;
+    }
+    @keyframes metalShine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     /* Left action buttons */
     .btn-deactivate {
       background: linear-gradient(135deg, #ff4444, #ff8800);
@@ -419,6 +443,9 @@
     </button>
     <button class="btn btn-superboost" id="btnSuperBoost" onclick="triggerSuperBoost()">
       SUPER BOOST
+    </button>
+    <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
+      VAGUE METAL
     </button>
     <button class="btn btn-deactivate" id="btnDeactivate" onclick="deactivateBarrier()">
       Desactiver
@@ -2021,6 +2048,273 @@
       }
     }
 
+    // ===== METAL WAVE SYSTEM =====
+    let metalWaveActive = false;
+    let metalWaveTimer = 0;
+    let metalWavePhase = 0;
+    const metalWaveParticles = [];
+    const METAL_WAVE_DURATION = 480; // ~8 seconds at 60fps
+
+    function triggerMetalWave() {
+      if (!barrierActive || metalWaveActive) return;
+      metalWaveActive = true;
+      metalWaveTimer = METAL_WAVE_DURATION;
+      metalWavePhase = 0;
+      document.getElementById('btnMetalWave').classList.add('active-wave');
+      shakeAmount = 15;
+
+      // Spawn initial ring of metal particles
+      for (let i = 0; i < 60; i++) {
+        const a = (i / 60) * Math.PI * 2;
+        metalWaveParticles.push({
+          angle: a,
+          dist: barrierRadius * 0.85,
+          size: 4 + Math.random() * 6,
+          speed: 0.8 + Math.random() * 0.4,
+          phase: Math.random() * Math.PI * 2,
+          type: ['metal', 'fire', 'ice', 'water', 'electric'][Math.floor(Math.random() * 5)],
+          life: 1
+        });
+      }
+
+      // Play metal wave sound
+      try {
+        const actx = new (window.AudioContext || window.webkitAudioContext)();
+        // Deep metallic rumble
+        const osc = actx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(60, actx.currentTime);
+        osc.frequency.linearRampToValueAtTime(40, actx.currentTime + 1);
+        const gain = actx.createGain();
+        gain.gain.setValueAtTime(0.3, actx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, actx.currentTime + 0.5);
+        gain.gain.linearRampToValueAtTime(0, actx.currentTime + 2);
+        const filter = actx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 200;
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(actx.destination);
+        osc.start();
+        osc.stop(actx.currentTime + 2);
+        // Electric crackle overlay
+        const noise = actx.createBufferSource();
+        const buf = actx.createBuffer(1, actx.sampleRate * 1.5, actx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() > 0.95 ? 1 : 0.05);
+        noise.buffer = buf;
+        const ng = actx.createGain();
+        ng.gain.setValueAtTime(0.15, actx.currentTime);
+        ng.gain.linearRampToValueAtTime(0, actx.currentTime + 1.5);
+        noise.connect(ng);
+        ng.connect(actx.destination);
+        noise.start();
+        setTimeout(() => actx.close(), 2500);
+      } catch(e) {}
+    }
+
+    function updateMetalWave(t) {
+      if (!metalWaveActive) return;
+      metalWaveTimer--;
+      metalWavePhase += 0.05;
+
+      // Continuously spawn new particles
+      if (metalWaveTimer > 60 && Math.random() < 0.4) {
+        const a = Math.random() * Math.PI * 2;
+        metalWaveParticles.push({
+          angle: a,
+          dist: barrierRadius * (0.8 + Math.random() * 0.4),
+          size: 3 + Math.random() * 5,
+          speed: 0.5 + Math.random() * 0.5,
+          phase: Math.random() * Math.PI * 2,
+          type: ['metal', 'fire', 'ice', 'water', 'electric'][Math.floor(Math.random() * 5)],
+          life: 1
+        });
+      }
+
+      // Update particles
+      for (let i = metalWaveParticles.length - 1; i >= 0; i--) {
+        const p = metalWaveParticles[i];
+        p.angle += p.speed * 0.015;
+        p.dist += Math.sin(metalWavePhase + p.phase) * 0.5;
+        if (metalWaveTimer < 60) p.life -= 0.02;
+        if (p.life <= 0) metalWaveParticles.splice(i, 1);
+      }
+
+      // Destroy approaching monsters
+      for (let i = monsters.length - 1; i >= 0; i--) {
+        if (monsters[i].state !== 'approaching') continue;
+        const mx = monsters[i].x - centerX;
+        const my = (monsters[i].y - (centerY + 20)) / 0.55;
+        const mDist = Math.sqrt(mx * mx + my * my);
+        if (mDist < barrierRadius * 1.3) {
+          monsters[i].state = 'hit';
+          monsters[i].hitTime = t;
+          const pushA = Math.atan2(monsters[i].y - (centerY + 20), monsters[i].x - centerX);
+          monsters[i].flyVx = Math.cos(pushA) * 15;
+          monsters[i].flyVy = Math.sin(pushA) * 15 - 10;
+          monsters[i].flyRotSpeed = (Math.random() - 0.5) * 0.5;
+          monstersDefeated++;
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          shakeAmount = Math.max(shakeAmount, 10);
+          // Multi-element explosion on kill
+          for (let j = 0; j < 20; j++) {
+            impactParticles.push(new ImpactParticle(
+              monsters[i].x + (Math.random() - 0.5) * 30,
+              monsters[i].y + (Math.random() - 0.5) * 30,
+              ['rgba(192,192,192,1)', 'rgba(255,100,0,1)', 'rgba(0,200,255,1)', 'rgba(255,255,0,1)', 'rgba(100,200,255,1)'][Math.floor(Math.random() * 5)]
+            ));
+          }
+          spaceTexts.push(new SpaceText(monsters[i].x, monsters[i].y - 30));
+        }
+      }
+
+      // End wave
+      if (metalWaveTimer <= 0) {
+        metalWaveActive = false;
+        metalWaveParticles.length = 0;
+        document.getElementById('btnMetalWave').classList.remove('active-wave');
+      }
+    }
+
+    function drawMetalWave(t) {
+      if (!metalWaveActive && metalWaveParticles.length === 0) return;
+      ctx.save();
+      const cx = centerX;
+      const cy = centerY + 20;
+      const fadeAlpha = metalWaveTimer > 60 ? 1 : metalWaveTimer / 60;
+
+      // Liquid metal ring - main band
+      for (let layer = 0; layer < 3; layer++) {
+        ctx.beginPath();
+        const layerDist = barrierRadius * (0.9 + layer * 0.08);
+        const segments = 80;
+        for (let i = 0; i <= segments; i++) {
+          const a = (i / segments) * Math.PI * 2;
+          const wobble = Math.sin(a * 6 + metalWavePhase * 2) * 8 + Math.sin(a * 3 + metalWavePhase) * 5;
+          const waveH = Math.sin(a * 4 + metalWavePhase * 1.5) * 15;
+          const r = layerDist + wobble;
+          const px = cx + Math.cos(a) * r;
+          const py = cy + Math.sin(a) * r * 0.55 - waveH;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const metalColors = [
+          `rgba(180, 180, 200, ${0.25 * fadeAlpha})`,
+          `rgba(220, 220, 230, ${0.15 * fadeAlpha})`,
+          `rgba(160, 160, 180, ${0.1 * fadeAlpha})`
+        ];
+        ctx.fillStyle = metalColors[layer];
+        ctx.fill();
+        if (layer === 0) {
+          ctx.strokeStyle = `rgba(240, 240, 255, ${0.4 * fadeAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      // Elemental particles orbiting in the metal wave
+      metalWaveParticles.forEach(p => {
+        const px = cx + Math.cos(p.angle) * p.dist;
+        const py = cy + Math.sin(p.angle) * p.dist * 0.55;
+        const alpha = p.life * fadeAlpha;
+
+        if (p.type === 'metal') {
+          // Liquid metal droplet
+          const mGrd = ctx.createRadialGradient(px, py, 0, px, py, p.size);
+          mGrd.addColorStop(0, `rgba(240, 240, 250, ${alpha})`);
+          mGrd.addColorStop(0.5, `rgba(180, 180, 200, ${alpha * 0.8})`);
+          mGrd.addColorStop(1, `rgba(100, 100, 120, 0)`);
+          ctx.beginPath();
+          ctx.arc(px, py, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = mGrd;
+          ctx.fill();
+        } else if (p.type === 'fire') {
+          // Fire ember
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, ${100 + Math.floor(Math.sin(t * 0.01 + p.phase) * 80)}, 0, ${alpha})`;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(px, py - p.size, p.size * 0.4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 200, 50, ${alpha * 0.6})`;
+          ctx.fill();
+        } else if (p.type === 'ice') {
+          // Ice crystal
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * 0.003 + p.phase);
+          ctx.beginPath();
+          for (let k = 0; k < 6; k++) {
+            const ka = (k / 6) * Math.PI * 2;
+            ctx.lineTo(Math.cos(ka) * p.size, Math.sin(ka) * p.size);
+          }
+          ctx.closePath();
+          ctx.fillStyle = `rgba(180, 240, 255, ${alpha * 0.7})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        } else if (p.type === 'water') {
+          // Water orb
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * 0.7, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0, 150, 255, ${alpha * 0.6})`;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(px - p.size * 0.2, py - p.size * 0.2, p.size * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+          ctx.fill();
+        } else if (p.type === 'electric') {
+          // Electric spark
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * 0.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, ${150 + Math.floor(Math.random() * 105)}, ${alpha})`;
+          ctx.fill();
+          // Mini lightning bolt
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          let lx = px, ly = py;
+          for (let seg = 0; seg < 3; seg++) {
+            lx += (Math.random() - 0.5) * p.size * 3;
+            ly += (Math.random() - 0.5) * p.size * 3;
+            ctx.lineTo(lx, ly);
+          }
+          ctx.strokeStyle = `rgba(255, 255, 200, ${alpha * 0.8})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      });
+
+      // Electric arcs connecting across the wave (4 big arcs)
+      if (metalWaveTimer > 30) {
+        for (let arc = 0; arc < 4; arc++) {
+          const a1 = metalWavePhase + (arc / 4) * Math.PI * 2;
+          const a2 = a1 + 0.4 + Math.sin(metalWavePhase * 2 + arc) * 0.3;
+          ctx.beginPath();
+          const startX = cx + Math.cos(a1) * barrierRadius * 0.95;
+          const startY = cy + Math.sin(a1) * barrierRadius * 0.55 * 0.95;
+          ctx.moveTo(startX, startY);
+          let lx = startX, ly = startY;
+          const endX = cx + Math.cos(a2) * barrierRadius * 0.95;
+          const endY = cy + Math.sin(a2) * barrierRadius * 0.55 * 0.95;
+          for (let seg = 1; seg <= 5; seg++) {
+            const t2 = seg / 5;
+            lx = startX + (endX - startX) * t2 + (Math.random() - 0.5) * 20;
+            ly = startY + (endY - startY) * t2 + (Math.random() - 0.5) * 15;
+            ctx.lineTo(lx, ly);
+          }
+          ctx.strokeStyle = `rgba(255, 255, 100, ${0.6 * fadeAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
     // ===== ELEMENT HIT EFFECTS =====
     function spawnElementHitEffect(x, y, element, monster) {
       const particleColors = {
@@ -2223,6 +2517,7 @@
       document.getElementById('btnActivate').style.display = 'none';
       document.getElementById('btnDeactivate').style.display = 'block';
       document.getElementById('btnSuperBoost').style.display = 'block';
+      document.getElementById('btnMetalWave').style.display = 'block';
 
       // Activation burst effect
       for (let i = 0; i < 50; i++) {
@@ -2243,6 +2538,9 @@
       document.getElementById('btnDeactivate').style.display = 'none';
       document.getElementById('btnSuperBoost').style.display = 'none';
       document.getElementById('btnSuperBoost').classList.remove('boosting');
+      document.getElementById('btnMetalWave').style.display = 'none';
+      document.getElementById('btnMetalWave').classList.remove('active-wave');
+      metalWaveActive = false;
 
       // Remove all monsters
       monsters.length = 0;
@@ -2335,6 +2633,7 @@
     // Initial button state
     document.getElementById('btnDeactivate').style.display = 'none';
     document.getElementById('btnSuperBoost').style.display = 'none';
+    document.getElementById('btnMetalWave').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -2454,6 +2753,10 @@
 
       // Barrier
       drawBarrier(t);
+
+      // Metal wave (drawn behind monsters, on top of barrier)
+      updateMetalWave(t);
+      drawMetalWave(t);
 
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
