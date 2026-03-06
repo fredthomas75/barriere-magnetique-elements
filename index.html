@@ -888,6 +888,7 @@
       }
 
       update(t) {
+        if (this.state === 'caught') return; // Metal wave controls position
         if (this.state === 'approaching') {
           const dx = centerX - this.x;
           const dy = (centerY + 20) - this.y;
@@ -2049,266 +2050,507 @@
     }
 
     // ===== METAL WAVE SYSTEM =====
+    // Phase 1: attract monsters to center (0-180)
+    // Phase 2: dragon forms from metal (180-300)
+    // Phase 3: dragon grabs monsters and launches to space (300-540)
     let metalWaveActive = false;
     let metalWaveTimer = 0;
     let metalWavePhase = 0;
-    const metalWaveParticles = [];
-    const METAL_WAVE_DURATION = 480; // ~8 seconds at 60fps
+    let metalWaveStage = 'attract'; // attract, dragon, launch
+    let dragonX, dragonY, dragonAngle, dragonScale;
+    let caughtMonsters = []; // monsters caught by the vortex
+    let dragonLaunched = false;
+    const METAL_ATTRACT_END = 180;
+    const METAL_DRAGON_END = 300;
+    const METAL_LAUNCH_END = 540;
 
     function triggerMetalWave() {
       if (!barrierActive || metalWaveActive) return;
       metalWaveActive = true;
-      metalWaveTimer = METAL_WAVE_DURATION;
+      metalWaveTimer = 0;
       metalWavePhase = 0;
+      metalWaveStage = 'attract';
+      dragonX = centerX;
+      dragonY = centerY + 20;
+      dragonAngle = 0;
+      dragonScale = 0;
+      dragonLaunched = false;
+      caughtMonsters = [];
       document.getElementById('btnMetalWave').classList.add('active-wave');
-      shakeAmount = 15;
+      shakeAmount = 10;
 
-      // Spawn initial ring of metal particles
-      for (let i = 0; i < 60; i++) {
-        const a = (i / 60) * Math.PI * 2;
-        metalWaveParticles.push({
-          angle: a,
-          dist: barrierRadius * 0.85,
-          size: 4 + Math.random() * 6,
-          speed: 0.8 + Math.random() * 0.4,
-          phase: Math.random() * Math.PI * 2,
-          type: ['metal', 'fire', 'ice', 'water', 'electric'][Math.floor(Math.random() * 5)],
-          life: 1
-        });
+      // Force spawn some monsters if there are few
+      while (monsters.filter(m => m.state === 'approaching').length < 4) {
+        monsters.push(new Monster());
       }
 
-      // Play metal wave sound
+      // Sound: deep metallic rumble building up
       try {
         const actx = new (window.AudioContext || window.webkitAudioContext)();
-        // Deep metallic rumble
         const osc = actx.createOscillator();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(60, actx.currentTime);
-        osc.frequency.linearRampToValueAtTime(40, actx.currentTime + 1);
+        osc.frequency.setValueAtTime(40, actx.currentTime);
+        osc.frequency.linearRampToValueAtTime(80, actx.currentTime + 3);
+        osc.frequency.linearRampToValueAtTime(200, actx.currentTime + 5);
         const gain = actx.createGain();
-        gain.gain.setValueAtTime(0.3, actx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.15, actx.currentTime + 0.5);
-        gain.gain.linearRampToValueAtTime(0, actx.currentTime + 2);
+        gain.gain.setValueAtTime(0.2, actx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.35, actx.currentTime + 3);
+        gain.gain.linearRampToValueAtTime(0, actx.currentTime + 7);
         const filter = actx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 200;
+        filter.frequency.setValueAtTime(100, actx.currentTime);
+        filter.frequency.linearRampToValueAtTime(800, actx.currentTime + 5);
         osc.connect(filter);
         filter.connect(gain);
         gain.connect(actx.destination);
         osc.start();
-        osc.stop(actx.currentTime + 2);
-        // Electric crackle overlay
-        const noise = actx.createBufferSource();
-        const buf = actx.createBuffer(1, actx.sampleRate * 1.5, actx.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() > 0.95 ? 1 : 0.05);
-        noise.buffer = buf;
-        const ng = actx.createGain();
-        ng.gain.setValueAtTime(0.15, actx.currentTime);
-        ng.gain.linearRampToValueAtTime(0, actx.currentTime + 1.5);
-        noise.connect(ng);
-        ng.connect(actx.destination);
-        noise.start();
-        setTimeout(() => actx.close(), 2500);
+        osc.stop(actx.currentTime + 7);
+        // Dragon roar at phase 2
+        setTimeout(() => {
+          try {
+            const roar = actx.createOscillator();
+            roar.type = 'sawtooth';
+            roar.frequency.setValueAtTime(150, actx.currentTime);
+            roar.frequency.linearRampToValueAtTime(80, actx.currentTime + 0.5);
+            const rg = actx.createGain();
+            rg.gain.setValueAtTime(0.3, actx.currentTime);
+            rg.gain.linearRampToValueAtTime(0, actx.currentTime + 1);
+            roar.connect(rg);
+            rg.connect(actx.destination);
+            roar.start();
+            roar.stop(actx.currentTime + 1);
+          } catch(e) {}
+        }, 3000);
+        setTimeout(() => actx.close(), 8000);
       } catch(e) {}
     }
 
     function updateMetalWave(t) {
       if (!metalWaveActive) return;
-      metalWaveTimer--;
-      metalWavePhase += 0.05;
+      metalWaveTimer++;
+      metalWavePhase += 0.06;
 
-      // Continuously spawn new particles
-      if (metalWaveTimer > 60 && Math.random() < 0.4) {
-        const a = Math.random() * Math.PI * 2;
-        metalWaveParticles.push({
-          angle: a,
-          dist: barrierRadius * (0.8 + Math.random() * 0.4),
-          size: 3 + Math.random() * 5,
-          speed: 0.5 + Math.random() * 0.5,
-          phase: Math.random() * Math.PI * 2,
-          type: ['metal', 'fire', 'ice', 'water', 'electric'][Math.floor(Math.random() * 5)],
-          life: 1
+      const cx = centerX;
+      const cy = centerY + 20;
+
+      // === PHASE 1: ATTRACT ===
+      if (metalWaveTimer < METAL_ATTRACT_END) {
+        metalWaveStage = 'attract';
+        const attractStrength = metalWaveTimer / METAL_ATTRACT_END; // 0 to 1
+        shakeAmount = Math.max(shakeAmount, 3 + attractStrength * 8);
+
+        // Pull all approaching monsters toward center
+        for (let i = 0; i < monsters.length; i++) {
+          if (monsters[i].state !== 'approaching') continue;
+          const dx = cx - monsters[i].x;
+          const dy = cy - monsters[i].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 5) {
+            const pull = attractStrength * 3;
+            monsters[i].x += (dx / dist) * pull;
+            monsters[i].y += (dy / dist) * pull;
+          }
+          // When close enough, capture them
+          if (dist < 60 && !caughtMonsters.includes(monsters[i])) {
+            caughtMonsters.push(monsters[i]);
+            monsters[i].state = 'caught';
+            monsters[i].opacity = 0.7;
+          }
+        }
+        // Spin caught monsters around center
+        caughtMonsters.forEach((m, idx) => {
+          const spinA = metalWavePhase * 2 + (idx / Math.max(caughtMonsters.length, 1)) * Math.PI * 2;
+          const spinR = 25 + idx * 8;
+          m.x = cx + Math.cos(spinA) * spinR;
+          m.y = cy + Math.sin(spinA) * spinR * 0.5;
         });
       }
 
-      // Update particles
-      for (let i = metalWaveParticles.length - 1; i >= 0; i--) {
-        const p = metalWaveParticles[i];
-        p.angle += p.speed * 0.015;
-        p.dist += Math.sin(metalWavePhase + p.phase) * 0.5;
-        if (metalWaveTimer < 60) p.life -= 0.02;
-        if (p.life <= 0) metalWaveParticles.splice(i, 1);
-      }
+      // === PHASE 2: DRAGON FORMS ===
+      else if (metalWaveTimer < METAL_DRAGON_END) {
+        metalWaveStage = 'dragon';
+        const formProgress = (metalWaveTimer - METAL_ATTRACT_END) / (METAL_DRAGON_END - METAL_ATTRACT_END);
+        dragonScale = formProgress;
+        dragonX = cx;
+        dragonY = cy - 30 * formProgress;
+        shakeAmount = Math.max(shakeAmount, 8 + formProgress * 10);
 
-      // Destroy approaching monsters
-      for (let i = monsters.length - 1; i >= 0; i--) {
-        if (monsters[i].state !== 'approaching') continue;
-        const mx = monsters[i].x - centerX;
-        const my = (monsters[i].y - (centerY + 20)) / 0.55;
-        const mDist = Math.sqrt(mx * mx + my * my);
-        if (mDist < barrierRadius * 1.3) {
-          monsters[i].state = 'hit';
-          monsters[i].hitTime = t;
-          const pushA = Math.atan2(monsters[i].y - (centerY + 20), monsters[i].x - centerX);
-          monsters[i].flyVx = Math.cos(pushA) * 15;
-          monsters[i].flyVy = Math.sin(pushA) * 15 - 10;
-          monsters[i].flyRotSpeed = (Math.random() - 0.5) * 0.5;
-          monstersDefeated++;
-          document.getElementById('monsterCount').textContent = monstersDefeated;
-          shakeAmount = Math.max(shakeAmount, 10);
-          // Multi-element explosion on kill
-          for (let j = 0; j < 20; j++) {
-            impactParticles.push(new ImpactParticle(
-              monsters[i].x + (Math.random() - 0.5) * 30,
-              monsters[i].y + (Math.random() - 0.5) * 30,
-              ['rgba(192,192,192,1)', 'rgba(255,100,0,1)', 'rgba(0,200,255,1)', 'rgba(255,255,0,1)', 'rgba(100,200,255,1)'][Math.floor(Math.random() * 5)]
-            ));
+        // Keep caught monsters spinning tighter
+        caughtMonsters.forEach((m, idx) => {
+          const spinA = metalWavePhase * 3 + (idx / Math.max(caughtMonsters.length, 1)) * Math.PI * 2;
+          const spinR = 20 * (1 - formProgress * 0.5);
+          m.x = cx + Math.cos(spinA) * spinR;
+          m.y = cy + Math.sin(spinA) * spinR * 0.4;
+          m.opacity = 0.5 + formProgress * 0.3;
+        });
+
+        // Capture any remaining approaching monsters
+        for (let i = 0; i < monsters.length; i++) {
+          if (monsters[i].state !== 'approaching') continue;
+          const dx = cx - monsters[i].x;
+          const dy = cy - monsters[i].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          monsters[i].x += (dx / dist) * 5;
+          monsters[i].y += (dy / dist) * 5;
+          if (dist < 80 && !caughtMonsters.includes(monsters[i])) {
+            caughtMonsters.push(monsters[i]);
+            monsters[i].state = 'caught';
           }
-          spaceTexts.push(new SpaceText(monsters[i].x, monsters[i].y - 30));
         }
       }
 
-      // End wave
-      if (metalWaveTimer <= 0) {
+      // === PHASE 3: DRAGON LAUNCHES ===
+      else if (metalWaveTimer < METAL_LAUNCH_END) {
+        metalWaveStage = 'launch';
+        const launchProgress = (metalWaveTimer - METAL_DRAGON_END) / (METAL_LAUNCH_END - METAL_DRAGON_END);
+
+        if (!dragonLaunched) {
+          dragonLaunched = true;
+          shakeAmount = 25;
+          // Count all caught + remaining monsters
+          for (let i = 0; i < monsters.length; i++) {
+            if (monsters[i].state === 'approaching' && !caughtMonsters.includes(monsters[i])) {
+              caughtMonsters.push(monsters[i]);
+              monsters[i].state = 'caught';
+            }
+          }
+        }
+
+        // Dragon flies upward carrying monsters
+        dragonY = cy - 30 - launchProgress * (H + 200);
+        dragonX = cx + Math.sin(launchProgress * 8) * 30;
+        dragonScale = 1 + launchProgress * 0.5;
+        dragonAngle = Math.sin(launchProgress * 6) * 0.15;
+
+        // Monsters follow dragon upward
+        caughtMonsters.forEach((m, idx) => {
+          const offset = (idx + 1) * 25;
+          m.x = dragonX + Math.sin(metalWavePhase + idx) * 15;
+          m.y = dragonY + offset + Math.cos(metalWavePhase + idx * 0.7) * 8;
+          m.opacity = Math.max(0, 1 - launchProgress * 1.5);
+          m.flyRotation = (m.flyRotation || 0) + 0.1;
+        });
+
+        // Spawn trail particles behind dragon
+        if (Math.random() < 0.6) {
+          impactParticles.push(new ImpactParticle(
+            dragonX + (Math.random() - 0.5) * 40,
+            dragonY + 60,
+            ['rgba(192,192,192,1)', 'rgba(255,100,0,1)', 'rgba(0,200,255,1)', 'rgba(255,255,0,1)'][Math.floor(Math.random() * 4)]
+          ));
+        }
+
+        // When dragon is off screen, finalize
+        if (launchProgress > 0.8) {
+          caughtMonsters.forEach(m => {
+            monstersDefeated++;
+            // Remove from monsters array
+            const idx = monsters.indexOf(m);
+            if (idx >= 0) monsters.splice(idx, 1);
+          });
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          if (caughtMonsters.length > 0) {
+            spaceTexts.push(new SpaceText(cx, cy - 50));
+          }
+          caughtMonsters = [];
+        }
+      }
+
+      // End
+      else {
         metalWaveActive = false;
-        metalWaveParticles.length = 0;
+        metalWaveStage = 'attract';
+        caughtMonsters.forEach(m => {
+          const idx = monsters.indexOf(m);
+          if (idx >= 0) monsters.splice(idx, 1);
+          monstersDefeated++;
+        });
+        document.getElementById('monsterCount').textContent = monstersDefeated;
+        caughtMonsters = [];
         document.getElementById('btnMetalWave').classList.remove('active-wave');
       }
     }
 
-    function drawMetalWave(t) {
-      if (!metalWaveActive && metalWaveParticles.length === 0) return;
+    function drawMetalDragon(x, y, scale, angle, t) {
       ctx.save();
-      const cx = centerX;
-      const cy = centerY + 20;
-      const fadeAlpha = metalWaveTimer > 60 ? 1 : metalWaveTimer / 60;
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.scale(scale, scale);
 
-      // Liquid metal ring - main band
-      for (let layer = 0; layer < 3; layer++) {
+      // Dragon body - liquid metal with chrome reflections
+      const bodyLen = 80;
+
+      // Wings
+      ctx.save();
+      const wingFlap = Math.sin(t * 0.08) * 0.4;
+      // Left wing
+      ctx.save();
+      ctx.rotate(-0.3 + wingFlap);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-60, -40, -90, -10);
+      ctx.quadraticCurveTo(-70, -5, -50, 15);
+      ctx.quadraticCurveTo(-25, 10, 0, 0);
+      const lwGrd = ctx.createLinearGradient(-90, -40, 0, 0);
+      lwGrd.addColorStop(0, 'rgba(160, 160, 180, 0.7)');
+      lwGrd.addColorStop(0.5, 'rgba(200, 200, 220, 0.8)');
+      lwGrd.addColorStop(1, 'rgba(180, 180, 200, 0.6)');
+      ctx.fillStyle = lwGrd;
+      ctx.fill();
+      // Wing membrane lines
+      ctx.strokeStyle = 'rgba(220, 220, 240, 0.4)';
+      ctx.lineWidth = 1;
+      for (let w = 1; w <= 3; w++) {
         ctx.beginPath();
-        const layerDist = barrierRadius * (0.9 + layer * 0.08);
-        const segments = 80;
-        for (let i = 0; i <= segments; i++) {
-          const a = (i / segments) * Math.PI * 2;
-          const wobble = Math.sin(a * 6 + metalWavePhase * 2) * 8 + Math.sin(a * 3 + metalWavePhase) * 5;
-          const waveH = Math.sin(a * 4 + metalWavePhase * 1.5) * 15;
-          const r = layerDist + wobble;
-          const px = cx + Math.cos(a) * r;
-          const py = cy + Math.sin(a) * r * 0.55 - waveH;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        const metalColors = [
-          `rgba(180, 180, 200, ${0.25 * fadeAlpha})`,
-          `rgba(220, 220, 230, ${0.15 * fadeAlpha})`,
-          `rgba(160, 160, 180, ${0.1 * fadeAlpha})`
-        ];
-        ctx.fillStyle = metalColors[layer];
-        ctx.fill();
-        if (layer === 0) {
-          ctx.strokeStyle = `rgba(240, 240, 255, ${0.4 * fadeAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-30 * w / 2, -20 + w * 5, -50 - w * 10, -5 + w * 5);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // Right wing (mirror)
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.rotate(-0.3 + wingFlap);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-60, -40, -90, -10);
+      ctx.quadraticCurveTo(-70, -5, -50, 15);
+      ctx.quadraticCurveTo(-25, 10, 0, 0);
+      ctx.fillStyle = lwGrd;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(220, 220, 240, 0.4)';
+      ctx.lineWidth = 1;
+      for (let w = 1; w <= 3; w++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-30 * w / 2, -20 + w * 5, -50 - w * 10, -5 + w * 5);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.restore();
+
+      // Main body
+      const bodyGrd = ctx.createLinearGradient(0, -20, 0, bodyLen);
+      bodyGrd.addColorStop(0, '#e0e0e8');
+      bodyGrd.addColorStop(0.3, '#b0b0c0');
+      bodyGrd.addColorStop(0.6, '#9090a0');
+      bodyGrd.addColorStop(1, '#707080');
+      ctx.beginPath();
+      ctx.ellipse(0, bodyLen * 0.3, 18, bodyLen * 0.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = bodyGrd;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(240, 240, 255, 0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Neck + Head (top)
+      ctx.beginPath();
+      ctx.ellipse(0, -15, 12, 18, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#c8c8d8';
+      ctx.fill();
+
+      // Head
+      ctx.beginPath();
+      ctx.ellipse(0, -35, 14, 12, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#d0d0e0';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.stroke();
+
+      // Horns
+      ctx.beginPath();
+      ctx.moveTo(-8, -42);
+      ctx.lineTo(-15, -60);
+      ctx.lineTo(-5, -48);
+      ctx.fillStyle = '#a0a0b0';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(8, -42);
+      ctx.lineTo(15, -60);
+      ctx.lineTo(5, -48);
+      ctx.fill();
+
+      // Eyes - glowing red
+      ctx.beginPath();
+      ctx.arc(-6, -37, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff2200';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, -37, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff2200';
+      ctx.fill();
+      // Eye glow
+      ctx.beginPath();
+      ctx.arc(-6, -37, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 50, 0, 0.3)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, -37, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 50, 0, 0.3)';
+      ctx.fill();
+
+      // Mouth / jaw
+      ctx.beginPath();
+      ctx.moveTo(-8, -28);
+      ctx.lineTo(0, -22);
+      ctx.lineTo(8, -28);
+      ctx.strokeStyle = '#606070';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Fire breath from mouth
+      if (metalWaveStage === 'launch') {
+        for (let f = 0; f < 4; f++) {
+          const fx = (Math.random() - 0.5) * 12;
+          const fy = -22 - Math.random() * 20;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 3 + Math.random() * 4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, ${100 + Math.floor(Math.random() * 155)}, 0, ${0.4 + Math.random() * 0.4})`;
+          ctx.fill();
         }
       }
 
-      // Elemental particles orbiting in the metal wave
-      metalWaveParticles.forEach(p => {
-        const px = cx + Math.cos(p.angle) * p.dist;
-        const py = cy + Math.sin(p.angle) * p.dist * 0.55;
-        const alpha = p.life * fadeAlpha;
+      // Tail (below body)
+      ctx.beginPath();
+      ctx.moveTo(-5, bodyLen * 0.75);
+      const tailWave = Math.sin(t * 0.05) * 20;
+      ctx.quadraticCurveTo(tailWave, bodyLen * 0.9, tailWave * 0.5, bodyLen * 1.1);
+      ctx.quadraticCurveTo(tailWave * 0.3, bodyLen * 1.15, 0, bodyLen * 1.2);
+      ctx.quadraticCurveTo(-tailWave * 0.3, bodyLen * 1.15, -tailWave * 0.5, bodyLen * 1.1);
+      ctx.quadraticCurveTo(-tailWave, bodyLen * 0.9, 5, bodyLen * 0.75);
+      ctx.fillStyle = '#a0a0b0';
+      ctx.fill();
 
-        if (p.type === 'metal') {
-          // Liquid metal droplet
-          const mGrd = ctx.createRadialGradient(px, py, 0, px, py, p.size);
-          mGrd.addColorStop(0, `rgba(240, 240, 250, ${alpha})`);
-          mGrd.addColorStop(0.5, `rgba(180, 180, 200, ${alpha * 0.8})`);
-          mGrd.addColorStop(1, `rgba(100, 100, 120, 0)`);
+      // Elemental aura around dragon
+      // Fire ring
+      for (let i = 0; i < 6; i++) {
+        const ea = (i / 6) * Math.PI * 2 + t * 0.02;
+        const er = 30 + Math.sin(t * 0.05 + i) * 5;
+        const ex = Math.cos(ea) * er;
+        const ey = Math.sin(ea) * er * 0.6 + bodyLen * 0.2;
+        ctx.beginPath();
+        ctx.arc(ex, ey, 4, 0, Math.PI * 2);
+        const types = ['rgba(255,100,0,0.6)', 'rgba(0,200,255,0.5)', 'rgba(180,230,255,0.5)', 'rgba(255,255,0,0.5)'];
+        ctx.fillStyle = types[i % 4];
+        ctx.fill();
+      }
+
+      // Electric sparks around body
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        let lx2 = (Math.random() - 0.5) * 30;
+        let ly2 = Math.random() * bodyLen;
+        ctx.moveTo(lx2, ly2);
+        for (let s = 0; s < 3; s++) {
+          lx2 += (Math.random() - 0.5) * 20;
+          ly2 += (Math.random() - 0.5) * 15;
+          ctx.lineTo(lx2, ly2);
+        }
+        ctx.strokeStyle = 'rgba(255, 255, 150, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawMetalWave(t) {
+      if (!metalWaveActive) return;
+      ctx.save();
+      const cx = centerX;
+      const cy = centerY + 20;
+
+      if (metalWaveStage === 'attract') {
+        // Swirling vortex pulling monsters in
+        const attractProgress = metalWaveTimer / METAL_ATTRACT_END;
+
+        // Metal vortex rings
+        for (let ring = 0; ring < 4; ring++) {
+          const ringDist = barrierRadius * (1.2 - ring * 0.25) * (1 - attractProgress * 0.3);
           ctx.beginPath();
-          ctx.arc(px, py, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = mGrd;
-          ctx.fill();
-        } else if (p.type === 'fire') {
-          // Fire ember
-          ctx.beginPath();
-          ctx.arc(px, py, p.size * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, ${100 + Math.floor(Math.sin(t * 0.01 + p.phase) * 80)}, 0, ${alpha})`;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(px, py - p.size, p.size * 0.4, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 200, 50, ${alpha * 0.6})`;
-          ctx.fill();
-        } else if (p.type === 'ice') {
-          // Ice crystal
-          ctx.save();
-          ctx.translate(px, py);
-          ctx.rotate(t * 0.003 + p.phase);
-          ctx.beginPath();
-          for (let k = 0; k < 6; k++) {
-            const ka = (k / 6) * Math.PI * 2;
-            ctx.lineTo(Math.cos(ka) * p.size, Math.sin(ka) * p.size);
+          const segs = 60;
+          for (let i = 0; i <= segs; i++) {
+            const a = (i / segs) * Math.PI * 2 + metalWavePhase * (1 + ring * 0.5);
+            const wobble = Math.sin(a * 5 + metalWavePhase * 2) * 6;
+            const r = ringDist + wobble;
+            const px = cx + Math.cos(a) * r;
+            const py = cy + Math.sin(a) * r * 0.55;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
           }
           ctx.closePath();
-          ctx.fillStyle = `rgba(180, 240, 255, ${alpha * 0.7})`;
-          ctx.fill();
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.restore();
-        } else if (p.type === 'water') {
-          // Water orb
-          ctx.beginPath();
-          ctx.arc(px, py, p.size * 0.7, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0, 150, 255, ${alpha * 0.6})`;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(px - p.size * 0.2, py - p.size * 0.2, p.size * 0.25, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
-          ctx.fill();
-        } else if (p.type === 'electric') {
-          // Electric spark
-          ctx.beginPath();
-          ctx.arc(px, py, p.size * 0.5, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, ${150 + Math.floor(Math.random() * 105)}, ${alpha})`;
-          ctx.fill();
-          // Mini lightning bolt
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          let lx = px, ly = py;
-          for (let seg = 0; seg < 3; seg++) {
-            lx += (Math.random() - 0.5) * p.size * 3;
-            ly += (Math.random() - 0.5) * p.size * 3;
-            ctx.lineTo(lx, ly);
-          }
-          ctx.strokeStyle = `rgba(255, 255, 200, ${alpha * 0.8})`;
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = `rgba(200, 200, 220, ${(0.4 - ring * 0.08) * attractProgress})`;
+          ctx.lineWidth = 3 - ring * 0.5;
           ctx.stroke();
         }
-      });
 
-      // Electric arcs connecting across the wave (4 big arcs)
-      if (metalWaveTimer > 30) {
-        for (let arc = 0; arc < 4; arc++) {
-          const a1 = metalWavePhase + (arc / 4) * Math.PI * 2;
-          const a2 = a1 + 0.4 + Math.sin(metalWavePhase * 2 + arc) * 0.3;
+        // Spiraling metal streams converging to center
+        for (let s = 0; s < 6; s++) {
           ctx.beginPath();
-          const startX = cx + Math.cos(a1) * barrierRadius * 0.95;
-          const startY = cy + Math.sin(a1) * barrierRadius * 0.55 * 0.95;
-          ctx.moveTo(startX, startY);
-          let lx = startX, ly = startY;
-          const endX = cx + Math.cos(a2) * barrierRadius * 0.95;
-          const endY = cy + Math.sin(a2) * barrierRadius * 0.55 * 0.95;
-          for (let seg = 1; seg <= 5; seg++) {
-            const t2 = seg / 5;
-            lx = startX + (endX - startX) * t2 + (Math.random() - 0.5) * 20;
-            ly = startY + (endY - startY) * t2 + (Math.random() - 0.5) * 15;
-            ctx.lineTo(lx, ly);
+          const baseA = (s / 6) * Math.PI * 2 + metalWavePhase;
+          for (let p = 0; p < 15; p++) {
+            const t2 = p / 15;
+            const spiralR = barrierRadius * (1.1 - t2 * 0.9) * (1 - attractProgress * 0.2);
+            const spiralA = baseA + t2 * Math.PI * 1.5;
+            const px = cx + Math.cos(spiralA) * spiralR;
+            const py = cy + Math.sin(spiralA) * spiralR * 0.55;
+            if (p === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
           }
-          ctx.strokeStyle = `rgba(255, 255, 100, ${0.6 * fadeAlpha})`;
+          ctx.strokeStyle = `rgba(180, 180, 200, ${0.3 * attractProgress})`;
           ctx.lineWidth = 2;
           ctx.stroke();
+        }
+
+        // Electric arcs pulling inward
+        if (attractProgress > 0.3) {
+          for (let arc = 0; arc < 3; arc++) {
+            const a = metalWavePhase * 1.5 + (arc / 3) * Math.PI * 2;
+            const startR = barrierRadius * 0.8;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a) * startR, cy + Math.sin(a) * startR * 0.55);
+            let lx = cx + Math.cos(a) * startR, ly = cy + Math.sin(a) * startR * 0.55;
+            for (let seg = 0; seg < 6; seg++) {
+              const t2 = (seg + 1) / 6;
+              lx = cx + Math.cos(a) * startR * (1 - t2) + (Math.random() - 0.5) * 20;
+              ly = cy + Math.sin(a) * startR * 0.55 * (1 - t2) + (Math.random() - 0.5) * 15;
+              ctx.lineTo(lx, ly);
+            }
+            ctx.strokeStyle = `rgba(255, 255, 100, ${0.5 * attractProgress})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+      }
+
+      if (metalWaveStage === 'dragon' || metalWaveStage === 'launch') {
+        // Draw the metal dragon
+        drawMetalDragon(dragonX, dragonY, dragonScale, dragonAngle, t);
+
+        // Draw caught monsters spinning around/below dragon
+        caughtMonsters.forEach((m, idx) => {
+          if (m.opacity > 0) {
+            ctx.globalAlpha = m.opacity;
+            m.draw(t);
+            ctx.globalAlpha = 1;
+          }
+        });
+
+        // Dragon engine trail when launching
+        if (metalWaveStage === 'launch') {
+          for (let i = 0; i < 8; i++) {
+            const tx = dragonX + (Math.random() - 0.5) * 30;
+            const ty = dragonY + 80 * dragonScale + Math.random() * 40;
+            const tr = 5 + Math.random() * 10;
+            const tGrd = ctx.createRadialGradient(tx, ty, 0, tx, ty, tr);
+            tGrd.addColorStop(0, 'rgba(255, 200, 50, 0.6)');
+            tGrd.addColorStop(0.5, 'rgba(255, 100, 0, 0.3)');
+            tGrd.addColorStop(1, 'rgba(200, 200, 220, 0)');
+            ctx.beginPath();
+            ctx.arc(tx, ty, tr, 0, Math.PI * 2);
+            ctx.fillStyle = tGrd;
+            ctx.fill();
+          }
         }
       }
 
@@ -2766,7 +3008,10 @@
       // Update and draw monsters
       for (let i = monsters.length - 1; i >= 0; i--) {
         monsters[i].update(t);
-        monsters[i].draw(t);
+        // Skip drawing caught monsters here - drawMetalWave handles them
+        if (monsters[i].state !== 'caught') {
+          monsters[i].draw(t);
+        }
 
         // Spawn space text on hit
         if (monsters[i].state === 'hit' && t - monsters[i].hitTime < 20) {
@@ -2781,6 +3026,8 @@
           }
         }
 
+        // Don't remove caught monsters - metal wave handles their lifecycle
+        if (monsters[i].state === 'caught') continue;
         if (monsters[i].opacity <= 0 || monsters[i].y < -200 || monsters[i].x < -200 || monsters[i].x > W + 200) {
           monsters.splice(i, 1);
         }
