@@ -1634,51 +1634,99 @@
           ctx.restore();
 
         } else if (this.element === 'venom') {
-          // === VENOM ICE SPIKE - icy with toxic green ===
+          // === POISONED ICE SPIKE - large icy spike dripping toxic venom ===
+          // Toxic smoke trail
           this.trail.forEach((t, i) => {
             if (t.life <= 0) return;
-            // Green toxic drips in trail
+            // Green toxic cloud puffs
+            const puffSize = (4 + i * 0.5) * t.life;
             ctx.beginPath();
-            ctx.arc(t.x, t.y + Math.sin(this.t * 0.1 + i) * 3, 3 * t.life, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(0, 255, 80, ${t.life * 0.5})`;
+            ctx.arc(t.x + Math.sin(this.t * 0.08 + i * 0.7) * 4, t.y + Math.cos(this.t * 0.06 + i) * 3, puffSize, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 255, 60, ${t.life * 0.35})`;
             ctx.fill();
+            // Icy sparkle in trail
             ctx.beginPath();
-            ctx.arc(t.x, t.y, 2 * t.life, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(150, 220, 255, ${t.life * 0.3})`;
+            ctx.arc(t.x + (Math.random() - 0.5) * 5, t.y + (Math.random() - 0.5) * 5, 1.5 * t.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(180, 240, 255, ${t.life * 0.4})`;
             ctx.fill();
           });
           ctx.save();
           ctx.translate(this.x, this.y);
           ctx.rotate(ang);
-          // Main spike shape
+          // Toxic aura glow around spike
+          const auraGrd = ctx.createRadialGradient(0, 0, s * 0.5, 0, 0, s * 2.5);
+          auraGrd.addColorStop(0, 'rgba(0, 255, 80, 0.15)');
+          auraGrd.addColorStop(1, 'rgba(0, 255, 80, 0)');
           ctx.beginPath();
-          ctx.moveTo(s * 2.5, 0);
-          ctx.lineTo(-s, -s * 0.6);
-          ctx.lineTo(-s * 0.5, 0);
-          ctx.lineTo(-s, s * 0.6);
+          ctx.arc(0, 0, s * 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = auraGrd;
+          ctx.fill();
+          // Main spike shape - bigger and more menacing
+          ctx.beginPath();
+          ctx.moveTo(s * 3, 0);
+          ctx.lineTo(s * 0.5, -s * 0.7);
+          ctx.lineTo(-s * 1.2, -s * 0.4);
+          ctx.lineTo(-s * 0.8, 0);
+          ctx.lineTo(-s * 1.2, s * 0.4);
+          ctx.lineTo(s * 0.5, s * 0.7);
           ctx.closePath();
-          const venomGrd = ctx.createLinearGradient(-s, 0, s * 2.5, 0);
-          venomGrd.addColorStop(0, '#88eeff');
-          venomGrd.addColorStop(0.6, '#44ddaa');
-          venomGrd.addColorStop(1, '#00ff66');
+          const venomGrd = ctx.createLinearGradient(-s, 0, s * 3, 0);
+          venomGrd.addColorStop(0, '#aaeeff');
+          venomGrd.addColorStop(0.3, '#66ddcc');
+          venomGrd.addColorStop(0.6, '#33cc77');
+          venomGrd.addColorStop(1, '#00ff44');
           ctx.fillStyle = venomGrd;
           ctx.fill();
-          // Venom veins running through spike
-          ctx.strokeStyle = 'rgba(0, 255, 80, 0.7)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(-s * 0.3, 0);
-          ctx.bezierCurveTo(s * 0.3, -s * 0.2, s * 1.0, s * 0.1, s * 2.2, 0);
+          ctx.strokeStyle = 'rgba(200, 255, 220, 0.5)';
+          ctx.lineWidth = 1;
           ctx.stroke();
-          // Dripping venom drops
-          for (let d = 0; d < 3; d++) {
-            const dx = s * (0.3 + d * 0.5);
-            const dy = s * 0.4 + Math.sin(this.t * 0.15 + d) * s * 0.3;
+          // Crystal facet line
+          ctx.beginPath();
+          ctx.moveTo(s * 3, 0);
+          ctx.lineTo(s * 0.5, -s * 0.25);
+          ctx.lineTo(-s * 0.5, 0);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          // Venom veins running through spike
+          ctx.strokeStyle = 'rgba(0, 255, 80, 0.8)';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.5, 0);
+          ctx.bezierCurveTo(s * 0.5, -s * 0.15, s * 1.5, s * 0.1, s * 2.8, 0);
+          ctx.stroke();
+          // Second vein
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.3, s * 0.15);
+          ctx.bezierCurveTo(s * 0.4, s * 0.25, s * 1.2, s * 0.05, s * 2.2, s * 0.1);
+          ctx.stroke();
+          // Dripping venom drops falling from spike
+          for (let d = 0; d < 5; d++) {
+            const dx = s * (-0.2 + d * 0.6);
+            const dropY = s * 0.5 + Math.sin(this.t * 0.12 + d * 1.3) * s * 0.4;
+            const dropSize = 2 + Math.sin(this.t * 0.1 + d) * 1;
+            // Drop
             ctx.beginPath();
-            ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+            ctx.arc(dx, dropY, dropSize, 0, Math.PI * 2);
             ctx.fillStyle = '#00ff44';
             ctx.fill();
+            // Drip line connecting to spike
+            ctx.beginPath();
+            ctx.moveTo(dx, s * 0.3);
+            ctx.lineTo(dx, dropY - dropSize);
+            ctx.strokeStyle = 'rgba(0, 255, 80, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
           }
+          // Poison barb at the tip
+          ctx.beginPath();
+          ctx.moveTo(s * 3, 0);
+          ctx.lineTo(s * 2.5, -s * 0.15);
+          ctx.lineTo(s * 2.5, s * 0.15);
+          ctx.closePath();
+          ctx.fillStyle = '#00ff44';
+          ctx.fill();
           ctx.restore();
 
         } else if (this.element === 'electric') {
@@ -2021,6 +2069,37 @@
         }
       }
 
+      // Venom: poison splash spreading outward + dripping toxic particles
+      if (element === 'venom') {
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2;
+          const p = new ImpactParticle(
+            monster.x + Math.cos(a) * 5,
+            monster.y + Math.sin(a) * 5,
+            ['rgba(0,255,80,1)', 'rgba(0,200,60,1)', 'rgba(100,255,150,1)'][Math.floor(Math.random() * 3)]
+          );
+          p.vx = Math.cos(a) * (3 + Math.random() * 4);
+          p.vy = Math.sin(a) * (3 + Math.random() * 4);
+          p.size = 3 + Math.random() * 4;
+          p.life = 1.8;
+          impactParticles.push(p);
+        }
+        // Falling toxic drips
+        for (let i = 0; i < 6; i++) {
+          const p = new ImpactParticle(
+            monster.x + (Math.random() - 0.5) * monster.size,
+            monster.y,
+            'rgba(0,255,60,1)'
+          );
+          p.vx = (Math.random() - 0.5) * 2;
+          p.vy = 2 + Math.random() * 4;
+          p.size = 2 + Math.random() * 3;
+          p.life = 2;
+          impactParticles.push(p);
+        }
+        shakeAmount = Math.max(shakeAmount, 5);
+      }
+
       // Small screen shake
       shakeAmount = Math.max(shakeAmount, 3);
     }
@@ -2091,7 +2170,7 @@
 
       const roll = Math.random();
 
-      if (roll < 0.25 && activeEls.includes('fire')) {
+      if (roll < 0.2 && activeEls.includes('fire')) {
         // FIREBALL VOLLEY
         for (let i = 0; i < 2; i++) {
           projectiles.push(new Projectile(
@@ -2099,7 +2178,7 @@
             target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30, 'fire'
           ));
         }
-      } else if (roll < 0.5 && activeEls.includes('ice')) {
+      } else if (roll < 0.4 && activeEls.includes('ice')) {
         // ICE SPIKE BARRAGE
         for (let i = 0; i < 3; i++) {
           const spread = (Math.random() - 0.5) * 0.4;
@@ -2107,6 +2186,16 @@
           projectiles.push(new Projectile(
             bx + Math.cos(pa) * 8, by + Math.sin(pa) * 8,
             target.x + (Math.random() - 0.5) * 20, target.y + (Math.random() - 0.5) * 20, 'ice'
+          ));
+        }
+      } else if (roll < 0.55 && activeEls.includes('venom')) {
+        // POISONED ICE SPIKES - 2 venom spikes aimed precisely
+        for (let i = 0; i < 2; i++) {
+          const spread = (Math.random() - 0.5) * 0.25;
+          const pa = angle + spread;
+          projectiles.push(new Projectile(
+            bx + Math.cos(pa) * 8, by + Math.sin(pa) * 8,
+            target.x + (Math.random() - 0.5) * 15, target.y + (Math.random() - 0.5) * 15, 'venom'
           ));
         }
       } else if (roll < 0.7 && activeEls.length >= 2) {
