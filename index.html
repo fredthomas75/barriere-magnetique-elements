@@ -180,6 +180,40 @@
       50% { transform: scale(1.15); }
     }
 
+    .btn-ultraboost {
+      background: linear-gradient(135deg, #ff0000, #ff6600, #ffcc00, #ff0000, #ff0066, #ffaa00);
+      background-size: 500% 500%;
+      color: #fff;
+      font-size: clamp(13px, 2.5vw, 18px);
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-shadow: 0 0 15px rgba(255,0,0,0.8), 0 0 30px rgba(255,100,0,0.5);
+      box-shadow: 0 0 40px #ff000066, 0 0 80px #ff660044, 0 0 120px #ffcc0022, 0 4px 20px rgba(0,0,0,0.5);
+      animation: ultraGlow 1.5s ease infinite;
+      display: none;
+      border: 2px solid rgba(255, 200, 0, 0.5);
+    }
+    .btn-ultraboost:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 60px #ff0000aa, 0 0 100px #ff660066, 0 0 150px #ffcc0044;
+    }
+    .btn-ultraboost:active { transform: scale(0.95); }
+    .btn-ultraboost.ultra-active {
+      animation: ultraGlow 0.2s ease infinite, ultraPulse 0.12s ease infinite;
+      border-color: #fff;
+    }
+    @keyframes ultraGlow {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 50% 100%; }
+      50% { background-position: 100% 50%; }
+      75% { background-position: 50% 0%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes ultraPulse {
+      0%, 100% { transform: scale(1.08); box-shadow: 0 0 60px #ff0000cc, 0 0 100px #ff6600aa; }
+      50% { transform: scale(1.2); box-shadow: 0 0 80px #ff0000ff, 0 0 140px #ffcc00cc; }
+    }
+
     .btn-metalwave {
       background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
       background-size: 400% 400%;
@@ -447,6 +481,9 @@
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
     </button>
+    <button class="btn btn-ultraboost" id="btnUltraBoost" onclick="triggerUltraBoost()">
+      ULTRA BOOST
+    </button>
     <button class="btn btn-deactivate" id="btnDeactivate" onclick="deactivateBarrier()">
       Desactiver
     </button>
@@ -465,6 +502,7 @@
     let shakeAmount = 0;
     let superBoostActive = false;
     let superBoostTimer = 0;
+    let ultraBoostActive = false;
 
     const activeElements = { fire: true, ice: true, electric: true, water: true, venom: true };
 
@@ -2750,8 +2788,10 @@
 
     function barrierAutoFire(t) {
       if (!barrierActive) return;
-      if (t - lastBarrierFire < barrierFireInterval) return;
-      if (projectiles.length >= MAX_PROJECTILES) return;
+      const fireRate = ultraBoostActive ? 200 : barrierFireInterval;
+      const maxProj = ultraBoostActive ? 60 : MAX_PROJECTILES;
+      if (t - lastBarrierFire < fireRate) return;
+      if (projectiles.length >= maxProj) return;
 
       const targets = monsters.filter(m => m.state === 'approaching');
       if (targets.length === 0) return;
@@ -2822,6 +2862,7 @@
       document.getElementById('btnDeactivate').style.display = 'block';
       document.getElementById('btnSuperBoost').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
+      document.getElementById('btnUltraBoost').style.display = 'block';
 
       // Activation burst effect
       for (let i = 0; i < 50; i++) {
@@ -2835,6 +2876,7 @@
     function deactivateBarrier() {
       barrierActive = false;
       superBoostActive = false;
+      ultraBoostActive = false;
       activationProgress = 0;
       document.getElementById('shieldStatus').className = 'shield-status inactive';
       document.getElementById('shieldStatus').textContent = 'Bouclier Inactif';
@@ -2844,6 +2886,8 @@
       document.getElementById('btnSuperBoost').classList.remove('boosting');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
+      document.getElementById('btnUltraBoost').style.display = 'none';
+      document.getElementById('btnUltraBoost').classList.remove('ultra-active');
       metalWaveActive = false;
 
       // Remove all monsters
@@ -2934,10 +2978,191 @@
       }, 5000);
     }
 
+    // ===== ULTRA BOOST =====
+    function triggerUltraBoost() {
+      if (!barrierActive || ultraBoostActive) return;
+      ultraBoostActive = true;
+      shakeAmount = 30;
+
+      // Force all elements ON
+      Object.keys(activeElements).forEach(el => { activeElements[el] = true; });
+      document.querySelectorAll('.element-btn').forEach(btn => btn.classList.add('active'));
+
+      // Visual feedback
+      document.getElementById('btnUltraBoost').classList.add('ultra-active');
+      document.getElementById('shieldStatus').textContent = '⚡ ULTRA BOOST ⚡';
+      document.getElementById('shieldStatus').style.color = '#ff3300';
+      document.getElementById('shieldStatus').style.borderColor = '#ff330088';
+      document.getElementById('shieldStatus').style.boxShadow = '0 0 60px #ff330088, 0 0 120px #ffaa0044';
+
+      // Screen flash
+      const flash = document.getElementById('boostFlash');
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 300);
+
+      // Activate super boost too
+      superBoostActive = true;
+      superBoostTimer = 600; // 10 seconds
+      document.getElementById('btnSuperBoost').classList.add('boosting');
+
+      // Spawn a big wave of monsters
+      for (let i = 0; i < 20; i++) {
+        const m = new Monster();
+        const angle = (i / 20) * Math.PI * 2;
+        const dist = barrierRadius + 60 + Math.random() * 100;
+        m.x = centerX + Math.cos(angle) * dist;
+        m.y = (centerY + 20) + Math.sin(angle) * dist * 0.55;
+        monsters.push(m);
+      }
+
+      // Launch dragon immediately
+      if (!metalWaveActive) {
+        triggerMetalWave();
+      }
+
+      // Rapid water waves
+      let ultraWaveCount = 0;
+      const ultraWaveInterval = setInterval(() => {
+        if (!ultraBoostActive || ultraWaveCount >= 12) {
+          clearInterval(ultraWaveInterval);
+          return;
+        }
+        // Spawn water waves in all directions
+        for (let w = 0; w < 3; w++) {
+          const wAngle = Math.random() * Math.PI * 2;
+          waterWaves.push(new WaterWave(wAngle));
+        }
+        ultraWaveCount++;
+      }, 400);
+
+      // Rapid fire barrage from all barrier points
+      let ultraFireCount = 0;
+      const ultraFireInterval = setInterval(() => {
+        if (!ultraBoostActive || ultraFireCount >= 30) {
+          clearInterval(ultraFireInterval);
+          return;
+        }
+        const targets = monsters.filter(m => m.state === 'approaching');
+        if (targets.length > 0 && projectiles.length < 60) {
+          // Fire ALL element types simultaneously at random targets
+          const elements = ['fire', 'ice', 'electric', 'water', 'venom'];
+          for (let e = 0; e < elements.length; e++) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            const angle = Math.atan2(target.y - (centerY + 20), target.x - centerX);
+            const bx = centerX + Math.cos(angle) * barrierRadius * 0.9;
+            const by = (centerY + 20) + Math.sin(angle) * barrierRadius * 0.55 * 0.9;
+            projectiles.push(new Projectile(bx, by, target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30, elements[e]));
+          }
+        }
+        ultraFireCount++;
+      }, 250);
+
+      // Destroy nearby monsters with massive explosions over time
+      let ultraDestroyCount = 0;
+      const ultraDestroyInterval = setInterval(() => {
+        if (!ultraBoostActive || ultraDestroyCount >= 15) {
+          clearInterval(ultraDestroyInterval);
+          return;
+        }
+        // Hit closest approaching monster
+        const approaching = monsters.filter(m => m.state === 'approaching');
+        if (approaching.length > 0) {
+          const m = approaching[0];
+          m.state = 'hit';
+          m.hitTime = performance.now();
+          const angle = Math.atan2(m.y - (centerY + 20), m.x - centerX);
+          m.flyVx = Math.cos(angle) * (18 + Math.random() * 12);
+          m.flyVy = Math.sin(angle) * (18 + Math.random() * 12) - 15;
+          m.flyRotSpeed = (Math.random() - 0.5) * 0.6;
+          monstersDefeated++;
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          shakeAmount = Math.max(shakeAmount, 15);
+
+          // Massive multi-element explosion
+          for (let j = 0; j < 40; j++) {
+            impactParticles.push(new ImpactParticle(
+              m.x + (Math.random() - 0.5) * 40,
+              m.y + (Math.random() - 0.5) * 40,
+              ['rgba(255,0,0,1)', 'rgba(255,150,0,1)', 'rgba(255,255,0,1)', 'rgba(0,255,136,1)', 'rgba(0,200,255,1)', 'rgba(170,0,255,1)', 'rgba(255,200,0,1)'][Math.floor(Math.random() * 7)]
+            ));
+          }
+          spaceTexts.push(new SpaceText(m.x, m.y - 30));
+        }
+        ultraDestroyCount++;
+      }, 350);
+
+      // Spawn more monsters mid-fight for dramatic effect
+      setTimeout(() => {
+        if (!ultraBoostActive) return;
+        for (let i = 0; i < 10; i++) {
+          const m = new Monster();
+          const angle = Math.random() * Math.PI * 2;
+          const dist = barrierRadius + 80 + Math.random() * 120;
+          m.x = centerX + Math.cos(angle) * dist;
+          m.y = (centerY + 20) + Math.sin(angle) * dist * 0.55;
+          monsters.push(m);
+        }
+      }, 3000);
+
+      // Second dragon wave if first has finished
+      setTimeout(() => {
+        if (ultraBoostActive && !metalWaveActive) {
+          triggerMetalWave();
+        }
+      }, 5000);
+
+      // Ultra boost duration: 10 seconds
+      setTimeout(() => {
+        ultraBoostActive = false;
+        superBoostActive = false;
+        document.getElementById('btnUltraBoost').classList.remove('ultra-active');
+        document.getElementById('btnSuperBoost').classList.remove('boosting');
+        document.getElementById('shieldStatus').textContent = 'Bouclier Actif';
+        document.getElementById('shieldStatus').style.color = '';
+        document.getElementById('shieldStatus').style.borderColor = '';
+        document.getElementById('shieldStatus').style.boxShadow = '';
+      }, 10000);
+
+      // Sound: epic layered sound
+      try {
+        const actx = new (window.AudioContext || window.webkitAudioContext)();
+        // Deep bass rumble
+        const bass = actx.createOscillator();
+        bass.type = 'sawtooth';
+        bass.frequency.setValueAtTime(30, actx.currentTime);
+        bass.frequency.linearRampToValueAtTime(60, actx.currentTime + 2);
+        bass.frequency.linearRampToValueAtTime(100, actx.currentTime + 5);
+        const bg = actx.createGain();
+        bg.gain.setValueAtTime(0.25, actx.currentTime);
+        bg.gain.linearRampToValueAtTime(0.15, actx.currentTime + 8);
+        bg.gain.linearRampToValueAtTime(0, actx.currentTime + 10);
+        bass.connect(bg);
+        bg.connect(actx.destination);
+        bass.start();
+        bass.stop(actx.currentTime + 10);
+        // High energy whine
+        const whine = actx.createOscillator();
+        whine.type = 'sine';
+        whine.frequency.setValueAtTime(400, actx.currentTime);
+        whine.frequency.linearRampToValueAtTime(1200, actx.currentTime + 3);
+        whine.frequency.linearRampToValueAtTime(600, actx.currentTime + 8);
+        const wg = actx.createGain();
+        wg.gain.setValueAtTime(0.08, actx.currentTime);
+        wg.gain.linearRampToValueAtTime(0.12, actx.currentTime + 3);
+        wg.gain.linearRampToValueAtTime(0, actx.currentTime + 10);
+        whine.connect(wg);
+        wg.connect(actx.destination);
+        whine.start();
+        whine.stop(actx.currentTime + 10);
+        setTimeout(() => actx.close(), 11000);
+      } catch(e) {}
+    }
+
     // Initial button state
     document.getElementById('btnDeactivate').style.display = 'none';
     document.getElementById('btnSuperBoost').style.display = 'none';
     document.getElementById('btnMetalWave').style.display = 'none';
+    document.getElementById('btnUltraBoost').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
