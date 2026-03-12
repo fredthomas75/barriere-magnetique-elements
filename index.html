@@ -515,6 +515,42 @@
     window.addEventListener('resize', resize);
     resize();
 
+    // ===== MONTREAL DAY/NIGHT CYCLE =====
+    function getMontrealDaylight() {
+      const now = new Date();
+      const mtl = new Date(now.toLocaleString('en-US', { timeZone: 'America/Montreal' }));
+      const hour = mtl.getHours() + mtl.getMinutes() / 60;
+      const month = mtl.getMonth(); // 0-11
+
+      // Approximate sunrise/sunset for Montreal by month (decimal hours)
+      const sunTimes = [
+        [7.5, 16.5], [7.0, 17.3], [6.3, 18.0], [6.2, 19.5],
+        [5.5, 20.3], [5.2, 20.8], [5.3, 20.7], [5.8, 20.0],
+        [6.5, 19.0], [7.1, 18.0], [6.7, 16.5], [7.3, 16.2]
+      ];
+      const [sunrise, sunset] = sunTimes[month];
+
+      // Smooth transition: 0=night, 1=day
+      if (hour < sunrise - 0.5) return 0;
+      if (hour < sunrise + 0.5) return (hour - sunrise + 0.5);
+      if (hour < sunset - 0.5) return 1;
+      if (hour < sunset + 0.5) return 1 - (hour - sunset + 0.5);
+      return 0;
+    }
+
+    // Cache daylight value, update every 30 seconds
+    let daylight = getMontrealDaylight();
+    setInterval(() => { daylight = getMontrealDaylight(); }, 30000);
+
+    // Helper: interpolate color components
+    function lerpColor(c1, c2, t) {
+      return [
+        Math.round(c1[0] + (c2[0] - c1[0]) * t),
+        Math.round(c1[1] + (c2[1] - c1[1]) * t),
+        Math.round(c1[2] + (c2[2] - c1[2]) * t)
+      ];
+    }
+
     // ===== STARS =====
     class Star {
       constructor() { this.reset(); }
@@ -527,7 +563,9 @@
         this.brightness = Math.random() * 0.5 + 0.5;
       }
       draw(t) {
-        const alpha = this.brightness * (0.5 + 0.5 * Math.sin(t * this.twinkleSpeed + this.twinklePhase));
+        const nightFactor = 1 - daylight; // stars visible at night only
+        if (nightFactor < 0.05) return;
+        const alpha = this.brightness * (0.5 + 0.5 * Math.sin(t * this.twinkleSpeed + this.twinklePhase)) * nightFactor;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
@@ -549,11 +587,15 @@
 
       ctx.save();
 
-      // Main house body - stone facade
+      // Main house body - stone facade (brighter in daytime)
       const bodyGrad = ctx.createLinearGradient(hx - hw/2, hy - hh/3, hx + hw/2, hy + hh/2);
-      bodyGrad.addColorStop(0, '#5a4e42');
-      bodyGrad.addColorStop(0.5, '#4a3f35');
-      bodyGrad.addColorStop(1, '#3d3328');
+      const hd = daylight;
+      const hc1 = lerpColor([90, 78, 66], [140, 125, 110], hd);
+      const hc2 = lerpColor([74, 63, 53], [120, 108, 95], hd);
+      const hc3 = lerpColor([61, 51, 40], [100, 90, 78], hd);
+      bodyGrad.addColorStop(0, `rgb(${hc1})`);
+      bodyGrad.addColorStop(0.5, `rgb(${hc2})`);
+      bodyGrad.addColorStop(1, `rgb(${hc3})`);
       ctx.fillStyle = bodyGrad;
       ctx.beginPath();
       ctx.rect(hx - hw/2, hy - hh/3, hw, hh * 0.7);
@@ -561,8 +603,10 @@
 
       // Roof
       const roofGrad = ctx.createLinearGradient(hx, hy - hh/1.2, hx, hy - hh/3);
-      roofGrad.addColorStop(0, '#2a2a35');
-      roofGrad.addColorStop(1, '#1a1a25');
+      const rc1 = lerpColor([42, 42, 53], [80, 75, 70], hd);
+      const rc2 = lerpColor([26, 26, 37], [55, 50, 48], hd);
+      roofGrad.addColorStop(0, `rgb(${rc1})`);
+      roofGrad.addColorStop(1, `rgb(${rc2})`);
       ctx.fillStyle = roofGrad;
       ctx.beginPath();
       ctx.moveTo(hx - hw/2 - 20, hy - hh/3);
@@ -580,9 +624,14 @@
       ctx.lineTo(hx + hw/2 + 20, hy - hh/3);
       ctx.stroke();
 
-      // Windows - two rows
-      const winColor = barrierActive ? 'rgba(255, 220, 140, 0.9)' : 'rgba(255, 200, 100, 0.35)';
-      const winGlow = barrierActive ? 'rgba(255, 200, 80, 0.4)' : 'rgba(255, 200, 80, 0.1)';
+      // Windows - warm glow at night, sky reflection during day
+      const isNight = daylight < 0.5;
+      const winColor = isNight
+        ? (barrierActive ? 'rgba(255, 220, 140, 0.9)' : 'rgba(255, 200, 100, 0.35)')
+        : (barrierActive ? 'rgba(180, 210, 240, 0.8)' : 'rgba(150, 195, 230, 0.6)');
+      const winGlow = isNight
+        ? (barrierActive ? 'rgba(255, 200, 80, 0.4)' : 'rgba(255, 200, 80, 0.1)')
+        : 'rgba(100, 180, 255, 0.1)';
       const winW = hw * 0.16;
       const winH = hh * 0.16;
 
@@ -3200,30 +3249,73 @@
     function drawMoon(t) {
       const mx = W * 0.85;
       const my = H * 0.12;
-      const mr = 35;
 
-      ctx.save();
-      ctx.shadowColor = 'rgba(200, 220, 255, 0.5)';
-      ctx.shadowBlur = 40;
-      const moonGrad = ctx.createRadialGradient(mx - 5, my - 5, 0, mx, my, mr);
-      moonGrad.addColorStop(0, '#ffffee');
-      moonGrad.addColorStop(0.7, '#dde0cc');
-      moonGrad.addColorStop(1, '#bbbbaa');
-      ctx.beginPath();
-      ctx.arc(mx, my, mr, 0, Math.PI * 2);
-      ctx.fillStyle = moonGrad;
-      ctx.fill();
-
-      // Craters
-      ctx.fillStyle = 'rgba(150, 150, 130, 0.3)';
-      [[5, -8, 6], [-10, 5, 4], [8, 10, 3], [-5, -12, 5]].forEach(([ox, oy, r]) => {
+      if (daylight < 0.5) {
+        // MOON (night)
+        const moonAlpha = 1 - daylight * 2; // fade out as dawn approaches
+        const mr = 35;
+        ctx.save();
+        ctx.globalAlpha = moonAlpha;
+        ctx.shadowColor = 'rgba(200, 220, 255, 0.5)';
+        ctx.shadowBlur = 40;
+        const moonGrad = ctx.createRadialGradient(mx - 5, my - 5, 0, mx, my, mr);
+        moonGrad.addColorStop(0, '#ffffee');
+        moonGrad.addColorStop(0.7, '#dde0cc');
+        moonGrad.addColorStop(1, '#bbbbaa');
         ctx.beginPath();
-        ctx.arc(mx + ox, my + oy, r, 0, Math.PI * 2);
+        ctx.arc(mx, my, mr, 0, Math.PI * 2);
+        ctx.fillStyle = moonGrad;
         ctx.fill();
-      });
-
-      ctx.shadowBlur = 0;
-      ctx.restore();
+        // Craters
+        ctx.fillStyle = 'rgba(150, 150, 130, 0.3)';
+        [[5, -8, 6], [-10, 5, 4], [8, 10, 3], [-5, -12, 5]].forEach(([ox, oy, r]) => {
+          ctx.beginPath();
+          ctx.arc(mx + ox, my + oy, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      } else {
+        // SUN (day)
+        const sunAlpha = (daylight - 0.5) * 2; // fade in as day arrives
+        const sx = W * 0.8;
+        const sy = H * 0.13;
+        const sr = 40;
+        ctx.save();
+        ctx.globalAlpha = sunAlpha;
+        // Sun glow
+        const sunOuter = ctx.createRadialGradient(sx, sy, sr * 0.5, sx, sy, sr * 3);
+        sunOuter.addColorStop(0, 'rgba(255, 230, 100, 0.3)');
+        sunOuter.addColorStop(0.5, 'rgba(255, 200, 50, 0.1)');
+        sunOuter.addColorStop(1, 'rgba(255, 200, 50, 0)');
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2);
+        ctx.fillStyle = sunOuter;
+        ctx.fill();
+        // Sun body
+        const sunGrad = ctx.createRadialGradient(sx - 5, sy - 5, 0, sx, sy, sr);
+        sunGrad.addColorStop(0, '#ffffcc');
+        sunGrad.addColorStop(0.4, '#ffee66');
+        sunGrad.addColorStop(0.8, '#ffcc00');
+        sunGrad.addColorStop(1, '#ff9900');
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fillStyle = sunGrad;
+        ctx.fill();
+        // Sun rays
+        ctx.strokeStyle = 'rgba(255, 220, 50, 0.3)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + t * 0.0005;
+          const r1 = sr + 8;
+          const r2 = sr + 18 + Math.sin(t * 0.003 + i) * 5;
+          ctx.beginPath();
+          ctx.moveTo(sx + Math.cos(a) * r1, sy + Math.sin(a) * r1);
+          ctx.lineTo(sx + Math.cos(a) * r2, sy + Math.sin(a) * r2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
 
     // ===== MAIN LOOP =====
@@ -3239,12 +3331,38 @@
         if (shakeAmount < 0.5) shakeAmount = 0;
       }
 
-      // Background gradient - night sky
+      // Background gradient - dynamic sky based on Montreal time
       const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-      bgGrad.addColorStop(0, '#020010');
-      bgGrad.addColorStop(0.4, '#0a0020');
-      bgGrad.addColorStop(0.7, '#0f0a25');
-      bgGrad.addColorStop(1, '#050510');
+      const d = daylight; // 0=night, 1=day
+      if (d < 0.3) {
+        // Night sky
+        const n = d / 0.3; // 0 to 1 within night-to-dawn
+        const top = lerpColor([2, 0, 16], [40, 20, 60], n);
+        const mid = lerpColor([10, 0, 32], [80, 40, 70], n);
+        const low = lerpColor([15, 10, 37], [120, 60, 50], n);
+        const bot = lerpColor([5, 5, 16], [60, 30, 40], n);
+        bgGrad.addColorStop(0, `rgb(${top})`);
+        bgGrad.addColorStop(0.4, `rgb(${mid})`);
+        bgGrad.addColorStop(0.7, `rgb(${low})`);
+        bgGrad.addColorStop(1, `rgb(${bot})`);
+      } else if (d < 0.7) {
+        // Dawn/dusk transition
+        const t2 = (d - 0.3) / 0.4; // 0 to 1
+        const top = lerpColor([40, 20, 60], [100, 160, 220], t2);
+        const mid = lerpColor([80, 40, 70], [140, 195, 240], t2);
+        const low = lerpColor([120, 60, 50], [180, 210, 235], t2);
+        const bot = lerpColor([60, 30, 40], [120, 160, 200], t2);
+        bgGrad.addColorStop(0, `rgb(${top})`);
+        bgGrad.addColorStop(0.4, `rgb(${mid})`);
+        bgGrad.addColorStop(0.7, `rgb(${low})`);
+        bgGrad.addColorStop(1, `rgb(${bot})`);
+      } else {
+        // Full day
+        bgGrad.addColorStop(0, '#64A0DC');
+        bgGrad.addColorStop(0.4, '#8CB8E8');
+        bgGrad.addColorStop(0.7, '#B4D0F0');
+        bgGrad.addColorStop(1, '#78A8D4');
+      }
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, W, H);
 
@@ -3261,7 +3379,7 @@
           ctx.lineTo(0, ay + 60);
           ctx.closePath();
           const auroraColors = ['rgba(0, 255, 136, ', 'rgba(0, 150, 255, ', 'rgba(150, 0, 255, '];
-          ctx.fillStyle = auroraColors[i] + (activationProgress * 0.03) + ')';
+          ctx.fillStyle = auroraColors[i] + (activationProgress * 0.03 * (1 - daylight * 0.7)) + ')';
           ctx.fill();
         }
       }
