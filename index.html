@@ -516,12 +516,14 @@
     resize();
 
     // ===== MONTREAL DAY/NIGHT CYCLE =====
-    function getMontrealDaylight() {
+    function getMontrealTime() {
       const now = new Date();
       const mtl = new Date(now.toLocaleString('en-US', { timeZone: 'America/Montreal' }));
-      const hour = mtl.getHours() + mtl.getMinutes() / 60;
-      const month = mtl.getMonth(); // 0-11
+      return { hour: mtl.getHours() + mtl.getMinutes() / 60, month: mtl.getMonth() };
+    }
 
+    function getMontrealDaylight() {
+      const { hour, month } = getMontrealTime();
       // Approximate sunrise/sunset for Montreal by month (decimal hours)
       const sunTimes = [
         [7.5, 16.5], [7.0, 17.3], [6.3, 18.0], [6.2, 19.5],
@@ -530,17 +532,67 @@
       ];
       const [sunrise, sunset] = sunTimes[month];
 
-      // Smooth transition: 0=night, 1=day
-      if (hour < sunrise - 0.5) return 0;
-      if (hour < sunrise + 0.5) return (hour - sunrise + 0.5);
-      if (hour < sunset - 0.5) return 1;
-      if (hour < sunset + 0.5) return 1 - (hour - sunset + 0.5);
-      return 0;
+      // Wide transition zones for realism:
+      // Civil twilight ~1.5h before sunrise / after sunset
+      // Golden hour ~0.5h around sunrise/sunset
+      const twilightDuration = 1.5;
+      const dawnStart = sunrise - twilightDuration;
+      const duskEnd = sunset + twilightDuration;
+
+      if (hour < dawnStart) return 0;          // Deep night
+      if (hour < sunrise) {                     // Dawn twilight
+        const t = (hour - dawnStart) / twilightDuration;
+        return t * t * 0.4;                     // Slow ease-in, reaches 0.4 at sunrise
+      }
+      if (hour < sunrise + 0.75) {              // Post-sunrise golden hour
+        const t = (hour - sunrise) / 0.75;
+        return 0.4 + t * 0.6;                  // 0.4 → 1.0
+      }
+      if (hour < sunset - 0.75) return 1;      // Full day
+      if (hour < sunset) {                      // Pre-sunset golden hour
+        const t = (sunset - hour) / 0.75;
+        return 0.4 + t * 0.6;                  // 1.0 → 0.4
+      }
+      if (hour < duskEnd) {                     // Dusk twilight
+        const t = (duskEnd - hour) / twilightDuration;
+        return t * t * 0.4;                     // 0.4 → 0 slow ease-out
+      }
+      return 0;                                 // Night
     }
 
-    // Cache daylight value, update every 30 seconds
+    // Sky phase gives more detail: which part of the cycle are we in
+    // Returns: { phase: 'night'|'blueHour'|'dawn'|'goldenHour'|'day'|'goldenHourPM'|'dusk'|'blueHourPM', progress: 0-1 }
+    function getSkyPhase() {
+      const { hour, month } = getMontrealTime();
+      const sunTimes = [
+        [7.5, 16.5], [7.0, 17.3], [6.3, 18.0], [6.2, 19.5],
+        [5.5, 20.3], [5.2, 20.8], [5.3, 20.7], [5.8, 20.0],
+        [6.5, 19.0], [7.1, 18.0], [6.7, 16.5], [7.3, 16.2]
+      ];
+      const [sunrise, sunset] = sunTimes[month];
+
+      const blueStart = sunrise - 1.5;
+      const dawnStart = sunrise - 0.75;
+      const goldenAM = sunrise + 0.75;
+      const goldenPMStart = sunset - 0.75;
+      const duskEnd = sunset + 0.75;
+      const blueEnd = sunset + 1.5;
+
+      if (hour < blueStart) return { phase: 'night', progress: 0 };
+      if (hour < dawnStart) return { phase: 'blueHour', progress: (hour - blueStart) / (dawnStart - blueStart) };
+      if (hour < sunrise) return { phase: 'dawn', progress: (hour - dawnStart) / (sunrise - dawnStart) };
+      if (hour < goldenAM) return { phase: 'goldenHour', progress: (hour - sunrise) / (goldenAM - sunrise) };
+      if (hour < goldenPMStart) return { phase: 'day', progress: (hour - goldenAM) / (goldenPMStart - goldenAM) };
+      if (hour < sunset) return { phase: 'goldenHourPM', progress: (hour - goldenPMStart) / (sunset - goldenPMStart) };
+      if (hour < duskEnd) return { phase: 'dusk', progress: (hour - sunset) / (duskEnd - sunset) };
+      if (hour < blueEnd) return { phase: 'blueHourPM', progress: (hour - duskEnd) / (blueEnd - duskEnd) };
+      return { phase: 'night', progress: 0 };
+    }
+
+    // Cache values, update every 10 seconds for smoother transitions
     let daylight = getMontrealDaylight();
-    setInterval(() => { daylight = getMontrealDaylight(); }, 30000);
+    let skyPhase = getSkyPhase();
+    setInterval(() => { daylight = getMontrealDaylight(); skyPhase = getSkyPhase(); }, 10000);
 
     // Helper: interpolate color components
     function lerpColor(c1, c2, t) {
@@ -713,16 +765,20 @@
         ctx.shadowBlur = 0;
       }
 
-      // Ground / lawn
+      // Ground / lawn — brighter during day
       const groundGrad = ctx.createLinearGradient(0, hy + hh * 0.37, 0, H);
-      groundGrad.addColorStop(0, '#1a2810');
-      groundGrad.addColorStop(0.3, '#0f1a08');
-      groundGrad.addColorStop(1, '#050a03');
+      const gc1 = lerpColor([26, 40, 16], [60, 100, 35], hd);
+      const gc2 = lerpColor([15, 26, 8], [40, 70, 22], hd);
+      const gc3 = lerpColor([5, 10, 3], [20, 38, 12], hd);
+      groundGrad.addColorStop(0, `rgb(${gc1})`);
+      groundGrad.addColorStop(0.3, `rgb(${gc2})`);
+      groundGrad.addColorStop(1, `rgb(${gc3})`);
       ctx.fillStyle = groundGrad;
       ctx.fillRect(0, hy + hh * 0.37, W, H - hy);
 
       // Path to door
-      ctx.fillStyle = '#2a2520';
+      const pathC = lerpColor([42, 37, 32], [80, 72, 62], hd);
+      ctx.fillStyle = `rgb(${pathC})`;
       ctx.beginPath();
       ctx.moveTo(doorX - 5, doorY + doorH);
       ctx.lineTo(doorX - 30, hy + hh * 0.37 + 40);
@@ -3245,14 +3301,82 @@
       });
     });
 
-    // ===== MOON =====
+    // ===== MOON & SUN =====
     function drawMoon(t) {
-      const mx = W * 0.85;
-      const my = H * 0.12;
+      const { hour, month } = getMontrealTime();
+      const sunTimes = [
+        [7.5, 16.5], [7.0, 17.3], [6.3, 18.0], [6.2, 19.5],
+        [5.5, 20.3], [5.2, 20.8], [5.3, 20.7], [5.8, 20.0],
+        [6.5, 19.0], [7.1, 18.0], [6.7, 16.5], [7.3, 16.2]
+      ];
+      const [sunrise, sunset] = sunTimes[month];
+      const dayLen = sunset - sunrise;
 
+      // Sun travels along an arc from east (left) to west (right)
+      const sunProgress = Math.max(0, Math.min(1, (hour - sunrise) / dayLen)); // 0=sunrise, 1=sunset
+      // Arc: x goes from 15% to 85% of width, y follows inverted parabola (highest at noon)
+      const sx = W * (0.15 + sunProgress * 0.7);
+      const sy = H * (0.55 - 0.45 * Math.sin(sunProgress * Math.PI)); // parabolic arc, peaks at 10% height
+
+      // Sun color shifts: whiter at noon, more orange near horizon
+      const horizonProximity = Math.min(sunProgress, 1 - sunProgress) * 2; // 0=horizon, 1=noon
+      const sunR = 40;
+
+      if (daylight >= 0.15) {
+        // Draw sun
+        const sunAlpha = Math.min(1, daylight * 2.5);
+        ctx.save();
+        ctx.globalAlpha = sunAlpha;
+
+        // Outer glow — larger and more orange near horizon
+        const glowSize = sunR * (3 + (1 - horizonProximity) * 2);
+        const glowR = Math.round(255);
+        const glowG = Math.round(200 + horizonProximity * 30);
+        const glowB = Math.round(50 + horizonProximity * 50);
+        const sunOuter = ctx.createRadialGradient(sx, sy, sunR * 0.5, sx, sy, glowSize);
+        sunOuter.addColorStop(0, `rgba(${glowR}, ${glowG}, ${glowB}, 0.35)`);
+        sunOuter.addColorStop(0.5, `rgba(${glowR}, ${glowG}, ${glowB}, 0.1)`);
+        sunOuter.addColorStop(1, `rgba(${glowR}, ${glowG}, ${glowB}, 0)`);
+        ctx.beginPath();
+        ctx.arc(sx, sy, glowSize, 0, Math.PI * 2);
+        ctx.fillStyle = sunOuter;
+        ctx.fill();
+
+        // Sun body — yellower at zenith, orangish at horizon
+        const bodyR = 255;
+        const bodyG = Math.round(220 + horizonProximity * 35);
+        const bodyB = Math.round(50 + horizonProximity * 100);
+        const sunGrad = ctx.createRadialGradient(sx - 5, sy - 5, 0, sx, sy, sunR);
+        sunGrad.addColorStop(0, `rgb(255, ${bodyG + 20}, ${bodyB + 80})`);
+        sunGrad.addColorStop(0.4, `rgb(${bodyR}, ${bodyG}, ${bodyB})`);
+        sunGrad.addColorStop(0.8, `rgb(${bodyR}, ${Math.max(bodyG - 30, 150)}, ${Math.max(bodyB - 40, 0)})`);
+        sunGrad.addColorStop(1, `rgb(${bodyR}, ${Math.max(bodyG - 60, 120)}, 0)`);
+        ctx.beginPath();
+        ctx.arc(sx, sy, sunR, 0, Math.PI * 2);
+        ctx.fillStyle = sunGrad;
+        ctx.fill();
+
+        // Sun rays — more visible at low sun
+        const rayAlpha = 0.2 + (1 - horizonProximity) * 0.2;
+        ctx.strokeStyle = `rgba(255, 220, 50, ${rayAlpha})`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + t * 0.0005;
+          const r1 = sunR + 8;
+          const r2 = sunR + 18 + Math.sin(t * 0.003 + i) * 5;
+          ctx.beginPath();
+          ctx.moveTo(sx + Math.cos(a) * r1, sy + Math.sin(a) * r1);
+          ctx.lineTo(sx + Math.cos(a) * r2, sy + Math.sin(a) * r2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Moon — visible when daylight < 0.5
       if (daylight < 0.5) {
-        // MOON (night)
-        const moonAlpha = 1 - daylight * 2; // fade out as dawn approaches
+        const moonAlpha = Math.min(1, (0.5 - daylight) * 3); // smoother fade
+        const mx = W * 0.82;
+        const my = H * 0.12;
         const mr = 35;
         ctx.save();
         ctx.globalAlpha = moonAlpha;
@@ -3275,46 +3399,6 @@
         });
         ctx.shadowBlur = 0;
         ctx.restore();
-      } else {
-        // SUN (day)
-        const sunAlpha = (daylight - 0.5) * 2; // fade in as day arrives
-        const sx = W * 0.8;
-        const sy = H * 0.13;
-        const sr = 40;
-        ctx.save();
-        ctx.globalAlpha = sunAlpha;
-        // Sun glow
-        const sunOuter = ctx.createRadialGradient(sx, sy, sr * 0.5, sx, sy, sr * 3);
-        sunOuter.addColorStop(0, 'rgba(255, 230, 100, 0.3)');
-        sunOuter.addColorStop(0.5, 'rgba(255, 200, 50, 0.1)');
-        sunOuter.addColorStop(1, 'rgba(255, 200, 50, 0)');
-        ctx.beginPath();
-        ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2);
-        ctx.fillStyle = sunOuter;
-        ctx.fill();
-        // Sun body
-        const sunGrad = ctx.createRadialGradient(sx - 5, sy - 5, 0, sx, sy, sr);
-        sunGrad.addColorStop(0, '#ffffcc');
-        sunGrad.addColorStop(0.4, '#ffee66');
-        sunGrad.addColorStop(0.8, '#ffcc00');
-        sunGrad.addColorStop(1, '#ff9900');
-        ctx.beginPath();
-        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-        ctx.fillStyle = sunGrad;
-        ctx.fill();
-        // Sun rays
-        ctx.strokeStyle = 'rgba(255, 220, 50, 0.3)';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2 + t * 0.0005;
-          const r1 = sr + 8;
-          const r2 = sr + 18 + Math.sin(t * 0.003 + i) * 5;
-          ctx.beginPath();
-          ctx.moveTo(sx + Math.cos(a) * r1, sy + Math.sin(a) * r1);
-          ctx.lineTo(sx + Math.cos(a) * r2, sy + Math.sin(a) * r2);
-          ctx.stroke();
-        }
-        ctx.restore();
       }
     }
 
@@ -3331,40 +3415,56 @@
         if (shakeAmount < 0.5) shakeAmount = 0;
       }
 
-      // Background gradient - dynamic sky based on Montreal time
+      // Background gradient - dynamic sky based on Montreal time with detailed phases
       const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-      const d = daylight; // 0=night, 1=day
-      if (d < 0.3) {
-        // Night sky
-        const n = d / 0.3; // 0 to 1 within night-to-dawn
-        const top = lerpColor([2, 0, 16], [40, 20, 60], n);
-        const mid = lerpColor([10, 0, 32], [80, 40, 70], n);
-        const low = lerpColor([15, 10, 37], [120, 60, 50], n);
-        const bot = lerpColor([5, 5, 16], [60, 30, 40], n);
-        bgGrad.addColorStop(0, `rgb(${top})`);
-        bgGrad.addColorStop(0.4, `rgb(${mid})`);
-        bgGrad.addColorStop(0.7, `rgb(${low})`);
-        bgGrad.addColorStop(1, `rgb(${bot})`);
-      } else if (d < 0.7) {
-        // Dawn/dusk transition
-        const t2 = (d - 0.3) / 0.4; // 0 to 1
-        const top = lerpColor([40, 20, 60], [100, 160, 220], t2);
-        const mid = lerpColor([80, 40, 70], [140, 195, 240], t2);
-        const low = lerpColor([120, 60, 50], [180, 210, 235], t2);
-        const bot = lerpColor([60, 30, 40], [120, 160, 200], t2);
-        bgGrad.addColorStop(0, `rgb(${top})`);
-        bgGrad.addColorStop(0.4, `rgb(${mid})`);
-        bgGrad.addColorStop(0.7, `rgb(${low})`);
-        bgGrad.addColorStop(1, `rgb(${bot})`);
-      } else {
-        // Full day
-        bgGrad.addColorStop(0, '#64A0DC');
-        bgGrad.addColorStop(0.4, '#8CB8E8');
-        bgGrad.addColorStop(0.7, '#B4D0F0');
-        bgGrad.addColorStop(1, '#78A8D4');
-      }
+      const sp = skyPhase;
+
+      // Sky color palettes for each phase
+      const skyPalettes = {
+        night:        { top: [2, 0, 16],    mid: [10, 0, 32],   low: [15, 10, 37],  bot: [5, 5, 16] },
+        blueHour:     { top: [15, 10, 50],  mid: [25, 20, 65],  low: [40, 30, 70],  bot: [20, 15, 45] },
+        dawn:         { top: [40, 25, 75],  mid: [90, 50, 80],  low: [180, 100, 60], bot: [140, 70, 50] },
+        goldenHour:   { top: [80, 120, 180],mid: [130, 160, 200],low: [200, 160, 100],bot: [170, 130, 80] },
+        day:          { top: [100, 160, 220],mid: [140, 195, 240],low: [180, 210, 235],bot: [120, 160, 200] },
+        goldenHourPM: { top: [90, 130, 190],mid: [140, 140, 170],low: [210, 140, 80], bot: [180, 110, 60] },
+        dusk:         { top: [50, 30, 80],  mid: [100, 50, 75],  low: [180, 90, 55],  bot: [130, 60, 45] },
+        blueHourPM:   { top: [20, 12, 55],  mid: [30, 22, 68],   low: [50, 35, 70],   bot: [25, 18, 48] }
+      };
+
+      // Determine which two palettes to blend between
+      const phaseOrder = ['night', 'blueHour', 'dawn', 'goldenHour', 'day', 'goldenHourPM', 'dusk', 'blueHourPM', 'night'];
+      const phaseIdx = phaseOrder.indexOf(sp.phase);
+      const fromPalette = skyPalettes[sp.phase] || skyPalettes.night;
+      const nextPhase = phaseOrder[phaseIdx + 1] || 'night';
+      const toPalette = skyPalettes[nextPhase] || skyPalettes.night;
+      const p = sp.progress;
+
+      const skyTop = lerpColor(fromPalette.top, toPalette.top, p);
+      const skyMid = lerpColor(fromPalette.mid, toPalette.mid, p);
+      const skyLow = lerpColor(fromPalette.low, toPalette.low, p);
+      const skyBot = lerpColor(fromPalette.bot, toPalette.bot, p);
+      bgGrad.addColorStop(0, `rgb(${skyTop})`);
+      bgGrad.addColorStop(0.4, `rgb(${skyMid})`);
+      bgGrad.addColorStop(0.7, `rgb(${skyLow})`);
+      bgGrad.addColorStop(1, `rgb(${skyBot})`);
+
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, W, H);
+
+      // Horizon glow during golden hours and dawn/dusk
+      const glowPhases = ['dawn', 'goldenHour', 'goldenHourPM', 'dusk'];
+      if (glowPhases.includes(sp.phase)) {
+        const glowIntensity = sp.phase === 'dawn' || sp.phase === 'dusk' ? 0.25 : 0.15;
+        const glowAlpha = glowIntensity * (sp.phase === 'goldenHour' ? (1 - p) : sp.phase === 'goldenHourPM' ? p : 1);
+        const glowColor = sp.phase === 'dawn' || sp.phase === 'goldenHour'
+          ? `rgba(255, 180, 80, ${glowAlpha})`
+          : `rgba(255, 120, 60, ${glowAlpha})`;
+        const glowGrad = ctx.createRadialGradient(W * 0.5, H * 0.75, 0, W * 0.5, H * 0.75, W * 0.7);
+        glowGrad.addColorStop(0, glowColor);
+        glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(0, 0, W, H);
+      }
 
       // Aurora effect when barrier active
       if (activationProgress > 0) {
@@ -3387,7 +3487,48 @@
       // Stars
       stars.forEach(s => s.draw(t));
 
-      // Moon
+      // Clouds — visible during day and at dawn/dusk (tinted)
+      if (daylight > 0.05) {
+        const cloudAlpha = Math.min(0.7, daylight * 1.2);
+        // Seeded cloud positions that drift slowly
+        const clouds = [
+          { baseX: 0.12, y: 0.08, w: 90, h: 30, speed: 0.008 },
+          { baseX: 0.35, y: 0.14, w: 70, h: 22, speed: 0.006 },
+          { baseX: 0.55, y: 0.06, w: 100, h: 35, speed: 0.01 },
+          { baseX: 0.78, y: 0.18, w: 60, h: 20, speed: 0.007 },
+          { baseX: 0.92, y: 0.1, w: 80, h: 28, speed: 0.009 },
+        ];
+        // Cloud tint: white during day, pink/orange at dawn/dusk
+        const isGolden = sp.phase === 'dawn' || sp.phase === 'goldenHour' || sp.phase === 'goldenHourPM' || sp.phase === 'dusk';
+        const cr = isGolden ? 255 : 240;
+        const cg = isGolden ? (sp.phase === 'dawn' || sp.phase === 'dusk' ? 160 : 200) : 240;
+        const cb = isGolden ? (sp.phase === 'dawn' || sp.phase === 'dusk' ? 120 : 170) : 245;
+
+        clouds.forEach(c => {
+          const cx = ((c.baseX + t * c.speed * 0.001) % 1.3 - 0.15) * W;
+          const cy = c.y * H;
+          ctx.save();
+          ctx.globalAlpha = cloudAlpha;
+          // Draw cloud as overlapping ellipses
+          const cGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, c.w * 0.6);
+          cGrad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.9)`);
+          cGrad.addColorStop(0.6, `rgba(${cr}, ${cg}, ${cb}, 0.5)`);
+          cGrad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+          ctx.fillStyle = cGrad;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, c.w * 0.6, c.h * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(cx - c.w * 0.3, cy + 3, c.w * 0.4, c.h * 0.45, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(cx + c.w * 0.35, cy + 2, c.w * 0.45, c.h * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      // Moon & Sun
       drawMoon(t);
 
       // House
