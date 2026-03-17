@@ -409,6 +409,18 @@
       text-align: center;
     }
 
+    .weather-badge {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      font-family: 'Orbitron', monospace;
+      font-size: 9px;
+      color: #667799;
+      letter-spacing: 1px;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
     @media (max-width: 600px) {
       .element-selector { right: 6px; gap: 6px; }
       .element-btn { width: 52px; height: 52px; font-size: 18px; border-radius: 12px; }
@@ -441,6 +453,7 @@
     <div class="address-badge">
       455 Avenue Argyle, Westmount, QC &bull; Protection Active 24/7
     </div>
+    <div class="weather-badge" id="weatherBadge"></div>
   </div>
 
   <div class="element-selector">
@@ -593,6 +606,74 @@
     let daylight = getMontrealDaylight();
     let skyPhase = getSkyPhase();
     setInterval(() => { daylight = getMontrealDaylight(); skyPhase = getSkyPhase(); }, 10000);
+
+    // ===== REAL WEATHER from Open-Meteo (Montreal) =====
+    let weather = { cloudCover: 0, weatherCode: 0, precipitation: 0, visibility: 24000, loaded: false };
+    // Smoothly interpolated weather for rendering (avoids sudden jumps)
+    let weatherSmooth = { cloudCover: 0, weatherCode: 0, precipitation: 0, visibility: 24000 };
+
+    async function fetchWeather() {
+      try {
+        const url = 'https://api.open-meteo.com/v1/forecast?latitude=45.5017&longitude=-73.5673&current=weather_code,cloud_cover,precipitation,visibility';
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data && data.current) {
+          weather.cloudCover = data.current.cloud_cover || 0;       // 0-100%
+          weather.weatherCode = data.current.weather_code || 0;     // WMO code
+          weather.precipitation = data.current.precipitation || 0;  // mm
+          weather.visibility = data.current.visibility || 24000;    // meters
+          weather.loaded = true;
+          if (typeof updateWeatherBadge === 'function') updateWeatherBadge();
+        }
+      } catch (e) { /* silently ignore - keep last known or defaults */ }
+    }
+    fetchWeather();
+    setInterval(fetchWeather, 10 * 60 * 1000); // refresh every 10 min
+
+    // Weather code helpers
+    function isRaining(code) { return (code >= 51 && code <= 67) || (code >= 80 && code <= 82); }
+    function isSnowing(code) { return (code >= 71 && code <= 77) || (code >= 85 && code <= 86); }
+    function isThunderstorm(code) { return code >= 95 && code <= 99; }
+    function isFoggy(code) { return code === 45 || code === 48; }
+
+    function weatherDescription(code) {
+      if (code === 0) return 'Ciel degag\u00e9';
+      if (code <= 3) return 'Partiellement nuageux';
+      if (code === 45 || code === 48) return 'Brouillard';
+      if (code >= 51 && code <= 55) return 'Bruine';
+      if (code >= 56 && code <= 57) return 'Bruine vergla\u00e7ante';
+      if (code >= 61 && code <= 65) return 'Pluie';
+      if (code >= 66 && code <= 67) return 'Pluie vergla\u00e7ante';
+      if (code >= 71 && code <= 75) return 'Neige';
+      if (code === 77) return 'Gr\u00e9sil';
+      if (code >= 80 && code <= 82) return 'Averses';
+      if (code >= 85 && code <= 86) return 'Averses de neige';
+      if (code >= 95) return 'Orage';
+      return '';
+    }
+
+    function weatherEmoji(code) {
+      if (code === 0) return daylight > 0.5 ? '\u2600\uFE0F' : '\uD83C\uDF19';
+      if (code <= 3) return daylight > 0.5 ? '\u26C5' : '\uD83C\uDF24\uFE0F';
+      if (code === 45 || code === 48) return '\uD83C\uDF2B\uFE0F';
+      if (code >= 51 && code <= 67) return '\uD83C\uDF27\uFE0F';
+      if (code >= 71 && code <= 86) return '\u2744\uFE0F';
+      if (code >= 95) return '\u26A1';
+      return '\u2601\uFE0F';
+    }
+
+    function updateWeatherBadge() {
+      const el = document.getElementById('weatherBadge');
+      if (!el || !weather.loaded) return;
+      const emoji = weatherEmoji(weather.weatherCode);
+      const desc = weatherDescription(weather.weatherCode);
+      el.textContent = `${emoji} ${desc} \u2022 Nuages ${Math.round(weather.cloudCover)}%`;
+    }
+    setInterval(updateWeatherBadge, 5000);
+
+    // Rain/snow particles
+    let precipParticles = [];
+    const MAX_PRECIP = 200;
 
     // Helper: interpolate color components
     function lerpColor(c1, c2, t) {
@@ -3323,8 +3404,10 @@
       const sunR = 40;
 
       if (daylight >= 0.15) {
-        // Draw sun
-        const sunAlpha = Math.min(1, daylight * 2.5);
+        // Draw sun — dimmed by cloud cover
+        const ccNow = weatherSmooth.cloudCover / 100;
+        const sunAlpha = Math.min(1, daylight * 2.5) * (1 - ccNow * 0.85); // nearly invisible at 100% clouds
+        if (sunAlpha > 0.02) {
         ctx.save();
         ctx.globalAlpha = sunAlpha;
 
@@ -3370,11 +3453,13 @@
           ctx.stroke();
         }
         ctx.restore();
+        } // end sunAlpha > 0.02
       }
 
-      // Moon — visible when daylight < 0.5
+      // Moon — visible when daylight < 0.5, hidden by clouds
       if (daylight < 0.5) {
-        const moonAlpha = Math.min(1, (0.5 - daylight) * 3); // smoother fade
+        const ccNow = weatherSmooth.cloudCover / 100;
+        const moonAlpha = Math.min(1, (0.5 - daylight) * 3) * (1 - ccNow * 0.95); // nearly invisible when overcast
         const mx = W * 0.82;
         const my = H * 0.12;
         const mr = 35;
@@ -3404,6 +3489,14 @@
 
     // ===== MAIN LOOP =====
     function gameLoop(t) {
+      // Smoothly interpolate weather values (avoid sudden changes)
+      const wLerp = 0.02; // slow interpolation
+      weatherSmooth.cloudCover += (weather.cloudCover - weatherSmooth.cloudCover) * wLerp;
+      weatherSmooth.precipitation += (weather.precipitation - weatherSmooth.precipitation) * wLerp;
+      weatherSmooth.visibility += (weather.visibility - weatherSmooth.visibility) * wLerp;
+      weatherSmooth.weatherCode = weather.weatherCode; // codes don't interpolate
+      const cc = weatherSmooth.cloudCover / 100; // 0-1 cloud cover fraction
+
       // Screen shake
       ctx.save();
       if (shakeAmount > 0) {
@@ -3439,10 +3532,20 @@
       const toPalette = skyPalettes[nextPhase] || skyPalettes.night;
       const p = sp.progress;
 
-      const skyTop = lerpColor(fromPalette.top, toPalette.top, p);
-      const skyMid = lerpColor(fromPalette.mid, toPalette.mid, p);
-      const skyLow = lerpColor(fromPalette.low, toPalette.low, p);
-      const skyBot = lerpColor(fromPalette.bot, toPalette.bot, p);
+      // Apply weather: blend sky toward overcast gray based on cloud cover
+      const overcastDay = [140, 145, 150];   // gray overcast during day
+      const overcastNight = [20, 20, 28];    // dark overcast at night
+      const overcast = lerpColor(overcastNight, overcastDay, daylight);
+      const cloudGray = cc * 0.7; // how much to gray-out (max 70% at 100% clouds)
+
+      let skyTop = lerpColor(fromPalette.top, toPalette.top, p);
+      let skyMid = lerpColor(fromPalette.mid, toPalette.mid, p);
+      let skyLow = lerpColor(fromPalette.low, toPalette.low, p);
+      let skyBot = lerpColor(fromPalette.bot, toPalette.bot, p);
+      skyTop = lerpColor(skyTop, overcast, cloudGray);
+      skyMid = lerpColor(skyMid, overcast, cloudGray);
+      skyLow = lerpColor(skyLow, overcast, cloudGray * 0.8);
+      skyBot = lerpColor(skyBot, overcast, cloudGray * 0.6);
       bgGrad.addColorStop(0, `rgb(${skyTop})`);
       bgGrad.addColorStop(0.4, `rgb(${skyMid})`);
       bgGrad.addColorStop(0.7, `rgb(${skyLow})`);
@@ -3451,11 +3554,11 @@
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, W, H);
 
-      // Horizon glow during golden hours and dawn/dusk
+      // Horizon glow during golden hours and dawn/dusk (suppressed by clouds)
       const glowPhases = ['dawn', 'goldenHour', 'goldenHourPM', 'dusk'];
-      if (glowPhases.includes(sp.phase)) {
+      if (glowPhases.includes(sp.phase) && cc < 0.8) {
         const glowIntensity = sp.phase === 'dawn' || sp.phase === 'dusk' ? 0.25 : 0.15;
-        const glowAlpha = glowIntensity * (sp.phase === 'goldenHour' ? (1 - p) : sp.phase === 'goldenHourPM' ? p : 1);
+        const glowAlpha = glowIntensity * (sp.phase === 'goldenHour' ? (1 - p) : sp.phase === 'goldenHourPM' ? p : 1) * (1 - cc);
         const glowColor = sp.phase === 'dawn' || sp.phase === 'goldenHour'
           ? `rgba(255, 180, 80, ${glowAlpha})`
           : `rgba(255, 120, 60, ${glowAlpha})`;
@@ -3463,6 +3566,14 @@
         glowGrad.addColorStop(0, glowColor);
         glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = glowGrad;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Fog overlay
+      if (isFoggy(weatherSmooth.weatherCode) || weatherSmooth.visibility < 5000) {
+        const fogDensity = isFoggy(weatherSmooth.weatherCode) ? 0.4 : Math.max(0, 0.3 * (1 - weatherSmooth.visibility / 5000));
+        const fogColor = daylight > 0.5 ? `rgba(180, 185, 190, ${fogDensity})` : `rgba(60, 65, 75, ${fogDensity})`;
+        ctx.fillStyle = fogColor;
         ctx.fillRect(0, 0, W, H);
       }
 
@@ -3484,52 +3595,134 @@
         }
       }
 
-      // Stars
-      stars.forEach(s => s.draw(t));
+      // Stars — hidden by cloud cover
+      if (cc < 0.9) {
+        ctx.save();
+        ctx.globalAlpha = 1 - cc; // fade stars with cloud cover
+        stars.forEach(s => s.draw(t));
+        ctx.restore();
+      }
 
-      // Clouds — visible during day and at dawn/dusk (tinted)
-      if (daylight > 0.05) {
-        const cloudAlpha = Math.min(0.7, daylight * 1.2);
-        // Seeded cloud positions that drift slowly
-        const clouds = [
-          { baseX: 0.12, y: 0.08, w: 90, h: 30, speed: 0.008 },
-          { baseX: 0.35, y: 0.14, w: 70, h: 22, speed: 0.006 },
-          { baseX: 0.55, y: 0.06, w: 100, h: 35, speed: 0.01 },
-          { baseX: 0.78, y: 0.18, w: 60, h: 20, speed: 0.007 },
-          { baseX: 0.92, y: 0.1, w: 80, h: 28, speed: 0.009 },
-        ];
-        // Cloud tint: white during day, pink/orange at dawn/dusk
+      // Clouds — driven by real weather cloud cover
+      // At cc=0 show 1-2 wisps, at cc=0.5 show 5-6, at cc=1.0 show dense overcast (12+)
+      const numClouds = Math.max(1, Math.floor(cc * 14) + 1);
+      if (numClouds > 0) {
+        // Cloud tint: white during day, gray when overcast, pink/orange at dawn/dusk, dark at night
         const isGolden = sp.phase === 'dawn' || sp.phase === 'goldenHour' || sp.phase === 'goldenHourPM' || sp.phase === 'dusk';
-        const cr = isGolden ? 255 : 240;
-        const cg = isGolden ? (sp.phase === 'dawn' || sp.phase === 'dusk' ? 160 : 200) : 240;
-        const cb = isGolden ? (sp.phase === 'dawn' || sp.phase === 'dusk' ? 120 : 170) : 245;
+        const isNightPhase = sp.phase === 'night' || sp.phase === 'blueHour' || sp.phase === 'blueHourPM';
 
-        clouds.forEach(c => {
-          const cx = ((c.baseX + t * c.speed * 0.001) % 1.3 - 0.15) * W;
-          const cy = c.y * H;
+        let cloudBaseColor;
+        if (isNightPhase) {
+          cloudBaseColor = lerpColor([40, 40, 55], [25, 25, 35], cc); // dark clouds at night
+        } else if (isGolden) {
+          const goldenTint = sp.phase === 'dawn' || sp.phase === 'dusk' ? [255, 160, 120] : [255, 200, 170];
+          cloudBaseColor = lerpColor(goldenTint, [170, 165, 160], cc); // golden → gray when overcast
+        } else {
+          cloudBaseColor = lerpColor([240, 240, 245], [160, 160, 165], cc); // white → gray
+        }
+        const [clR, clG, clB] = cloudBaseColor;
+
+        // Cloud opacity: wispy when few, thick when overcast
+        const cloudOpacity = isNightPhase
+          ? Math.min(0.6, 0.15 + cc * 0.5)
+          : Math.min(0.85, 0.2 + cc * 0.65);
+
+        // Generate deterministic clouds based on index
+        for (let i = 0; i < numClouds; i++) {
+          const seed = i * 137.508; // golden angle for spread
+          const baseX = (seed % 1.2);
+          const baseY = 0.04 + (seed * 7.3 % 0.22);
+          const cw = 60 + (seed * 3.7 % 50) + cc * 30; // wider when overcast
+          const ch = 18 + (seed * 2.3 % 16) + cc * 10;
+          const speed = 0.005 + (seed * 1.1 % 0.008);
+
+          const cx = ((baseX + t * speed * 0.001) % 1.4 - 0.2) * W;
+          const cy = baseY * H;
           ctx.save();
-          ctx.globalAlpha = cloudAlpha;
-          // Draw cloud as overlapping ellipses
-          const cGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, c.w * 0.6);
-          cGrad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.9)`);
-          cGrad.addColorStop(0.6, `rgba(${cr}, ${cg}, ${cb}, 0.5)`);
-          cGrad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+          ctx.globalAlpha = cloudOpacity;
+          const cGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cw * 0.6);
+          cGrad.addColorStop(0, `rgba(${clR}, ${clG}, ${clB}, 0.9)`);
+          cGrad.addColorStop(0.6, `rgba(${clR}, ${clG}, ${clB}, 0.5)`);
+          cGrad.addColorStop(1, `rgba(${clR}, ${clG}, ${clB}, 0)`);
           ctx.fillStyle = cGrad;
           ctx.beginPath();
-          ctx.ellipse(cx, cy, c.w * 0.6, c.h * 0.5, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, cy, cw * 0.6, ch * 0.5, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.ellipse(cx - c.w * 0.3, cy + 3, c.w * 0.4, c.h * 0.45, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx - cw * 0.3, cy + 3, cw * 0.4, ch * 0.45, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.ellipse(cx + c.w * 0.35, cy + 2, c.w * 0.45, c.h * 0.4, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx + cw * 0.35, cy + 2, cw * 0.45, ch * 0.4, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-        });
+        }
       }
 
       // Moon & Sun
       drawMoon(t);
+
+      // ===== PRECIPITATION (rain/snow) =====
+      const wCode = weatherSmooth.weatherCode;
+      const precipActive = isRaining(wCode) || isSnowing(wCode) || isThunderstorm(wCode);
+      if (precipActive) {
+        const isSnow = isSnowing(wCode);
+        const intensity = weatherSmooth.precipitation > 5 ? 1 : weatherSmooth.precipitation > 1 ? 0.6 : 0.3;
+        const targetCount = Math.floor(MAX_PRECIP * intensity);
+
+        // Spawn particles
+        while (precipParticles.length < targetCount) {
+          precipParticles.push({
+            x: Math.random() * W * 1.2 - W * 0.1,
+            y: -Math.random() * H * 0.3,
+            speed: isSnow ? 1 + Math.random() * 2 : 6 + Math.random() * 8,
+            size: isSnow ? 2 + Math.random() * 3 : 1 + Math.random(),
+            drift: isSnow ? (Math.random() - 0.5) * 1.5 : (Math.random() - 0.5) * 2,
+            wobble: Math.random() * Math.PI * 2
+          });
+        }
+
+        // Update & draw
+        for (let i = precipParticles.length - 1; i >= 0; i--) {
+          const pp = precipParticles[i];
+          pp.y += pp.speed;
+          pp.x += pp.drift;
+          if (isSnow) pp.x += Math.sin(pp.wobble + t * 0.003) * 0.3;
+
+          if (pp.y > H || pp.x < -20 || pp.x > W + 20) {
+            precipParticles.splice(i, 1);
+            continue;
+          }
+
+          ctx.save();
+          if (isSnow) {
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = '#e8eef5';
+            ctx.beginPath();
+            ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Rain streak
+            ctx.globalAlpha = 0.4;
+            ctx.strokeStyle = daylight > 0.5 ? '#8899bb' : '#5566aa';
+            ctx.lineWidth = pp.size;
+            ctx.beginPath();
+            ctx.moveTo(pp.x, pp.y);
+            ctx.lineTo(pp.x + pp.drift * 2, pp.y + pp.speed * 2.5);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      } else {
+        precipParticles.length = 0; // clear when no precipitation
+      }
+
+      // Lightning flash during thunderstorms
+      if (isThunderstorm(wCode) && Math.random() < 0.003) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 240, 0.25)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
 
       // House
       drawHouse();
