@@ -3296,7 +3296,7 @@
             if (d < closestDist) { closestDist = d; closest = m; }
           }
 
-          if (closest && closestDist < 200) {
+          if (closest && closestDist < 400) {
             cobraStriking = true;
             cobraStrikeTimer = 0;
             cobraTarget = closest;
@@ -3343,9 +3343,29 @@
             cobraTarget = null;
           }
         } else {
-          // Patrol orbit
-          const prev = cobraPath[0] || { x: headX, y: headY };
-          cobraHeadAngle = Math.atan2(headY - prev.y, headX - prev.x);
+          // If there's a monster far away, slither toward it instead of just orbiting
+          let huntTarget = null;
+          let huntDist = Infinity;
+          for (const m of monsters) {
+            if (m.state !== 'approaching' && m.state !== 'idle') continue;
+            if (cobraBittenMonsters.some(b => b.monster === m)) continue;
+            const dx = m.x - headX;
+            const dy = m.y - headY;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < huntDist) { huntDist = d; huntTarget = m; }
+          }
+          if (huntTarget && huntDist > 50) {
+            // Slither toward the target
+            const prev = cobraPath[0] || { x: headX, y: headY };
+            const toAngle = Math.atan2(huntTarget.y - prev.y, huntTarget.x - prev.x);
+            headX = prev.x + Math.cos(toAngle) * 5;
+            headY = prev.y + Math.sin(toAngle) * 5;
+            cobraHeadAngle = toAngle;
+          } else {
+            // Default patrol orbit
+            const prev = cobraPath[0] || { x: headX, y: headY };
+            cobraHeadAngle = Math.atan2(headY - prev.y, headX - prev.x);
+          }
         }
 
         cobraPath.unshift({ x: headX, y: headY });
@@ -3399,8 +3419,8 @@
             const idx = monsters.indexOf(m);
             if (idx >= 0) {
               monsters.splice(idx, 1);
-              monstersRepelled++;
-              document.getElementById('monsterCount').textContent = monstersRepelled;
+              monstersDefeated++;
+              document.getElementById('monsterCount').textContent = monstersDefeated;
               spaceTexts.push(new SpaceText(m.x, Math.max(20, m.y)));
             }
             cobraBittenMonsters.splice(i, 1);
