@@ -214,6 +214,30 @@
       50% { transform: scale(1.2); box-shadow: 0 0 80px #ff0000ff, 0 0 140px #ffcc00cc; }
     }
 
+    .btn-cobra {
+      background: linear-gradient(135deg, #00aa22, #44ff44, #008800, #33ee33, #006600);
+      background-size: 400% 400%;
+      color: #001a00;
+      font-size: clamp(10px, 1.8vw, 13px);
+      text-shadow: 0 1px 2px rgba(100,255,100,0.3);
+      box-shadow: 0 0 25px rgba(0,200,50,0.4), 0 0 50px rgba(100,255,0,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: cobraShine 3s ease infinite;
+      display: none;
+    }
+    .btn-cobra:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px rgba(0,255,50,0.6), 0 0 70px rgba(100,255,0,0.4);
+    }
+    .btn-cobra:active { transform: scale(0.95); }
+    .btn-cobra.cobra-active {
+      animation: cobraShine 0.4s ease infinite, boostPulse 0.3s ease infinite;
+    }
+    @keyframes cobraShine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     .btn-metalwave {
       background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
       background-size: 400% 400%;
@@ -490,6 +514,9 @@
     </button>
     <button class="btn btn-superboost" id="btnSuperBoost" onclick="triggerSuperBoost()">
       SUPER BOOST
+    </button>
+    <button class="btn btn-cobra" id="btnCobra" onclick="triggerCobra()">
+      COBRA VENIMEUX
     </button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
@@ -1113,6 +1140,7 @@
 
       update(t) {
         if (this.state === 'caught') return; // Metal wave controls position
+        if (this.state === 'venom' || this.state === 'venomDead') return; // Cobra controls position
         if (this.state === 'approaching') {
           const dx = centerX - this.x;
           const dy = (centerY + 20) - this.y;
@@ -3047,6 +3075,7 @@
       document.getElementById('btnActivate').style.display = 'none';
       document.getElementById('btnDeactivate').style.display = 'block';
       document.getElementById('btnSuperBoost').style.display = 'block';
+      document.getElementById('btnCobra').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
 
@@ -3070,11 +3099,14 @@
       document.getElementById('btnDeactivate').style.display = 'none';
       document.getElementById('btnSuperBoost').style.display = 'none';
       document.getElementById('btnSuperBoost').classList.remove('boosting');
+      document.getElementById('btnCobra').style.display = 'none';
+      document.getElementById('btnCobra').classList.remove('cobra-active');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
       document.getElementById('btnUltraBoost').style.display = 'none';
       document.getElementById('btnUltraBoost').classList.remove('ultra-active');
       metalWaveActive = false;
+      cobraActive = false;
 
       // Remove all monsters
       monsters.length = 0;
@@ -3164,6 +3196,378 @@
       }, 5000);
     }
 
+    // ===== COBRA VENIMEUX =====
+    let cobraActive = false;
+    let cobraTimer = 0;
+    let cobraPath = [];       // {x, y} segments for serpentine body
+    let cobraTarget = null;   // current monster target
+    let cobraHeadAngle = 0;
+    let cobraBittenMonsters = []; // monsters bitten and being processed
+    let cobraStriking = false;
+    let cobraStrikeTimer = 0;
+    const COBRA_SEGMENTS = 25;
+    const COBRA_DURATION = 480; // ~8 seconds at 60fps
+
+    function triggerCobra() {
+      if (cobraActive) return;
+      cobraActive = true;
+      cobraTimer = 0;
+      cobraPath = [];
+      cobraBittenMonsters = [];
+      cobraTarget = null;
+      cobraStriking = false;
+      document.getElementById('btnCobra').classList.add('cobra-active');
+
+      // Hissing sound
+      try {
+        const actx = new (window.AudioContext || window.webkitAudioContext)();
+        // White noise burst for hiss
+        const bufSize = actx.sampleRate * 0.8;
+        const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.4));
+        }
+        const src = actx.createBufferSource();
+        src.buffer = buf;
+        // Bandpass for hiss
+        const bp = actx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 5000;
+        bp.Q.value = 2;
+        const gain = actx.createGain();
+        gain.gain.value = 0.15;
+        src.connect(bp); bp.connect(gain); gain.connect(actx.destination);
+        src.start();
+      } catch(e) {}
+    }
+
+    function updateCobra(t) {
+      if (!cobraActive) return;
+      cobraTimer++;
+
+      // Phase 1: Enter (0-60) - slither from bottom
+      // Phase 2: Hunt (60-380) - chase and bite monsters
+      // Phase 3: Exit (380-480) - slither away
+
+      const barrierOuterR = barrierRadius + 60;
+
+      if (cobraTimer < 60) {
+        // Enter from bottom-right, spiral toward barrier exterior
+        const progress = cobraTimer / 60;
+        const entryAngle = Math.PI * 0.3; // bottom-right
+        const startX = W + 50;
+        const startY = H + 50;
+        const targetX = centerX + Math.cos(entryAngle) * barrierOuterR;
+        const targetY = (centerY + 20) + Math.sin(entryAngle) * barrierOuterR * 0.55;
+        const ease = progress * progress * (3 - 2 * progress); // smoothstep
+        const headX = startX + (targetX - startX) * ease;
+        const headY = startY + (targetY - startY) * ease;
+        cobraHeadAngle = Math.atan2(targetY - startY, targetX - startX);
+        cobraPath.unshift({ x: headX, y: headY });
+        if (cobraPath.length > COBRA_SEGMENTS) cobraPath.pop();
+      } else if (cobraTimer < 380) {
+        // Hunt phase — circle barrier exterior and strike at monsters
+        const huntTime = cobraTimer - 60;
+        const orbitAngle = Math.PI * 0.3 + huntTime * 0.015;
+
+        // Find closest approaching monster
+        let closest = null;
+        let closestDist = Infinity;
+        for (const m of monsters) {
+          if (m.state !== 'approaching' && m.state !== 'idle') continue;
+          if (cobraBittenMonsters.some(b => b.monster === m)) continue;
+          const dx = m.x - (cobraPath[0]?.x || centerX);
+          const dy = m.y - (cobraPath[0]?.y || centerY);
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < closestDist) { closestDist = d; closest = m; }
+        }
+
+        let headX, headY;
+        if (closest && closestDist < 200 && !cobraStriking) {
+          // Strike at monster!
+          cobraStriking = true;
+          cobraStrikeTimer = 0;
+          cobraTarget = closest;
+        }
+
+        if (cobraStriking && cobraTarget) {
+          cobraStrikeTimer++;
+          const strikeProg = Math.min(1, cobraStrikeTimer / 12); // fast lunge
+          const prevHead = cobraPath[0] || { x: centerX, y: centerY };
+          headX = prevHead.x + (cobraTarget.x - prevHead.x) * strikeProg;
+          headY = prevHead.y + (cobraTarget.y - prevHead.y) * strikeProg;
+          cobraHeadAngle = Math.atan2(cobraTarget.y - prevHead.y, cobraTarget.x - prevHead.x);
+
+          // Check if reached monster — bite!
+          const hitDx = headX - cobraTarget.x;
+          const hitDy = headY - cobraTarget.y;
+          if (Math.sqrt(hitDx * hitDx + hitDy * hitDy) < 25) {
+            // Bite! Monster is now venom-paralyzed
+            cobraTarget.state = 'venom';
+            cobraTarget.venomTimer = 0;
+            cobraBittenMonsters.push({ monster: cobraTarget, timer: 0 });
+            cobraStriking = false;
+            cobraTarget = null;
+
+            // Venom bite particles
+            for (let i = 0; i < 15; i++) {
+              impactParticles.push(new ImpactParticle(headX, headY, 'rgba(0, 255, 50, 1)'));
+            }
+
+            // Bite sound
+            try {
+              const actx = new (window.AudioContext || window.webkitAudioContext)();
+              const osc = actx.createOscillator();
+              osc.frequency.value = 200;
+              osc.frequency.linearRampToValueAtTime(80, actx.currentTime + 0.2);
+              const g = actx.createGain();
+              g.gain.value = 0.2;
+              g.gain.linearRampToValueAtTime(0, actx.currentTime + 0.3);
+              osc.connect(g); g.connect(actx.destination);
+              osc.start(); osc.stop(actx.currentTime + 0.3);
+            } catch(e) {}
+          }
+        } else {
+          // Patrol orbit
+          headX = centerX + Math.cos(orbitAngle) * barrierOuterR;
+          headY = (centerY + 20) + Math.sin(orbitAngle) * barrierOuterR * 0.55;
+          const prev = cobraPath[0] || { x: headX, y: headY };
+          cobraHeadAngle = Math.atan2(headY - prev.y, headX - prev.x);
+          cobraStriking = false;
+        }
+
+        cobraPath.unshift({ x: headX, y: headY });
+        if (cobraPath.length > COBRA_SEGMENTS) cobraPath.pop();
+      } else {
+        // Exit phase — slither off screen
+        const exitProg = (cobraTimer - 380) / 100;
+        if (cobraPath.length > 0) {
+          const headX = cobraPath[0].x + exitProg * 150;
+          const headY = cobraPath[0].y + exitProg * 100;
+          cobraPath.unshift({ x: headX, y: headY });
+          if (cobraPath.length > COBRA_SEGMENTS) cobraPath.pop();
+        }
+      }
+
+      // Update bitten monsters: paralyze → fly to space
+      for (let i = cobraBittenMonsters.length - 1; i >= 0; i--) {
+        const bm = cobraBittenMonsters[i];
+        bm.timer++;
+        const m = bm.monster;
+
+        if (bm.timer < 90) {
+          // Paralyzed — shake in place, turn green
+          m.x += (Math.random() - 0.5) * 3;
+          m.y += (Math.random() - 0.5) * 3;
+        } else {
+          // Dead — fly upward to space
+          m.state = 'venomDead';
+          m.y -= 4 + bm.timer * 0.05;
+          m.x += Math.sin(bm.timer * 0.1) * 2;
+          m.opacity = Math.max(0, 1 - (bm.timer - 90) / 120);
+
+          // Green poison trail
+          if (bm.timer % 3 === 0) {
+            impactParticles.push(new ImpactParticle(
+              m.x + (Math.random() - 0.5) * 20,
+              m.y + (Math.random() - 0.5) * 20,
+              'rgba(0, 200, 50, 1)'
+            ));
+          }
+
+          if (m.y < -100 || m.opacity <= 0) {
+            // Remove monster
+            const idx = monsters.indexOf(m);
+            if (idx >= 0) {
+              monsters.splice(idx, 1);
+              monstersRepelled++;
+              document.getElementById('monsterCount').textContent = monstersRepelled;
+              spaceTexts.push(new SpaceText(m.x, Math.max(20, m.y)));
+            }
+            cobraBittenMonsters.splice(i, 1);
+          }
+        }
+      }
+
+      // End cobra
+      if (cobraTimer >= COBRA_DURATION) {
+        cobraActive = false;
+        cobraPath = [];
+        cobraBittenMonsters = [];
+        document.getElementById('btnCobra').classList.remove('cobra-active');
+      }
+    }
+
+    function drawCobra(t) {
+      if (!cobraActive || cobraPath.length < 2) return;
+
+      ctx.save();
+
+      // Draw body from tail to head
+      for (let i = cobraPath.length - 1; i >= 0; i--) {
+        const seg = cobraPath[i];
+        const ratio = i / cobraPath.length; // 0=tail, 1=head
+        const bodyWidth = 4 + ratio * 10; // thicker near head
+
+        // Body color: dark green with lighter belly pattern
+        const green = Math.round(100 + ratio * 80);
+        const r = Math.round(20 + ratio * 30);
+        ctx.fillStyle = `rgb(${r}, ${green}, ${Math.round(r * 0.5)})`;
+        ctx.beginPath();
+        ctx.ellipse(seg.x, seg.y, bodyWidth, bodyWidth * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Scale pattern - diamond shapes
+        if (i % 3 === 0 && i > 2) {
+          ctx.fillStyle = `rgba(0, ${green + 40}, 20, 0.4)`;
+          ctx.beginPath();
+          const a = i > 0 ? Math.atan2(cobraPath[i-1].y - seg.y, cobraPath[i-1].x - seg.x) : 0;
+          ctx.save();
+          ctx.translate(seg.x, seg.y);
+          ctx.rotate(a);
+          ctx.fillRect(-bodyWidth * 0.3, -bodyWidth * 0.3, bodyWidth * 0.6, bodyWidth * 0.6);
+          ctx.restore();
+        }
+
+        // Belly lighter stripe
+        if (i > 0 && i < cobraPath.length - 1) {
+          ctx.fillStyle = `rgba(120, ${green + 60}, 60, 0.3)`;
+          ctx.beginPath();
+          ctx.ellipse(seg.x, seg.y + bodyWidth * 0.2, bodyWidth * 0.4, bodyWidth * 0.25, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Cobra head with hood
+      const head = cobraPath[0];
+      const ha = cobraHeadAngle;
+
+      ctx.save();
+      ctx.translate(head.x, head.y);
+      ctx.rotate(ha);
+
+      // Hood (flared sides) — classic cobra silhouette
+      const hoodW = 28;
+      const hoodH = 20;
+      ctx.fillStyle = '#1a6b1a';
+      ctx.beginPath();
+      ctx.moveTo(0, -hoodH);
+      ctx.bezierCurveTo(hoodW * 0.8, -hoodH * 0.7, hoodW, -hoodH * 0.2, hoodW * 0.6, hoodH * 0.3);
+      ctx.lineTo(0, hoodH * 0.5);
+      ctx.lineTo(-hoodW * 0.6, hoodH * 0.3);
+      ctx.bezierCurveTo(-hoodW, -hoodH * 0.2, -hoodW * 0.8, -hoodH * 0.7, 0, -hoodH);
+      ctx.fill();
+
+      // Hood pattern — V markings
+      ctx.strokeStyle = 'rgba(200, 255, 100, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-6, -8);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(6, -8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-4, -4);
+      ctx.lineTo(0, 2);
+      ctx.lineTo(4, -4);
+      ctx.stroke();
+
+      // Head — elongated
+      ctx.fillStyle = '#228b22';
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 12, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Snout
+      ctx.fillStyle = '#1a7a1a';
+      ctx.beginPath();
+      ctx.ellipse(18, 0, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eyes — menacing slits
+      ctx.fillStyle = '#ffff00';
+      ctx.beginPath();
+      ctx.ellipse(10, -5, 3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.ellipse(10, 5, 3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Vertical slit pupils
+      ctx.fillStyle = '#000';
+      ctx.fillRect(9.5, -6.5, 1.2, 5);
+      ctx.fillRect(9.5, 3.5, 1.2, 5);
+
+      // Fangs — visible when striking
+      if (cobraStriking) {
+        ctx.fillStyle = '#ffffffee';
+        ctx.beginPath();
+        ctx.moveTo(22, -2);
+        ctx.lineTo(30, -1);
+        ctx.lineTo(23, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(22, 2);
+        ctx.lineTo(30, 1);
+        ctx.lineTo(23, 0);
+        ctx.fill();
+
+        // Venom drip
+        ctx.fillStyle = 'rgba(0, 255, 80, 0.7)';
+        ctx.beginPath();
+        ctx.arc(30, 2 + Math.sin(t * 0.01) * 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Tongue flicking
+      if (!cobraStriking && cobraTimer % 40 < 20) {
+        ctx.strokeStyle = '#ff3333';
+        ctx.lineWidth = 1.5;
+        const tongueLen = 12 + Math.sin(t * 0.02) * 4;
+        ctx.beginPath();
+        ctx.moveTo(22, 0);
+        ctx.lineTo(22 + tongueLen, 0);
+        // Fork
+        ctx.moveTo(22 + tongueLen - 3, 0);
+        ctx.lineTo(22 + tongueLen, -3);
+        ctx.moveTo(22 + tongueLen - 3, 0);
+        ctx.lineTo(22 + tongueLen, 3);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      // Green venom glow around head
+      const glowGrad = ctx.createRadialGradient(head.x, head.y, 5, head.x, head.y, 35);
+      glowGrad.addColorStop(0, 'rgba(0, 255, 50, 0.15)');
+      glowGrad.addColorStop(1, 'rgba(0, 255, 50, 0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw bitten monsters with green tint
+      for (const bm of cobraBittenMonsters) {
+        const m = bm.monster;
+        if (bm.timer < 90) {
+          // Green poison overlay on paralyzed monster
+          ctx.save();
+          ctx.globalAlpha = 0.4 + Math.sin(bm.timer * 0.3) * 0.2;
+          ctx.fillStyle = '#00ff44';
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, 20, 0, Math.PI * 2);
+          ctx.fill();
+          // Skull/crossbones icon
+          ctx.fillStyle = '#004400';
+          ctx.font = '16px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('\u2620', m.x, m.y + 5);
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
+    }
+
     // ===== ULTRA BOOST =====
     function triggerUltraBoost() {
       if (!barrierActive || ultraBoostActive) return;
@@ -3204,6 +3608,10 @@
       // Launch dragon immediately
       if (!metalWaveActive) {
         triggerMetalWave();
+      }
+      // Launch cobra
+      if (!cobraActive) {
+        setTimeout(() => { if (!cobraActive) triggerCobra(); }, 1500);
       }
 
       // Rapid water waves
@@ -3739,6 +4147,10 @@
       updateMetalWave(t);
       drawMetalWave(t);
 
+      // Cobra venimeux
+      updateCobra(t);
+      drawCobra(t);
+
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
       barrierAutoFire(t);
@@ -3747,8 +4159,8 @@
       // Update and draw monsters
       for (let i = monsters.length - 1; i >= 0; i--) {
         monsters[i].update(t);
-        // Skip drawing caught monsters here - drawMetalWave handles them
-        if (monsters[i].state !== 'caught') {
+        // Skip drawing caught/venom monsters - their systems handle rendering
+        if (monsters[i].state !== 'caught' && monsters[i].state !== 'venom' && monsters[i].state !== 'venomDead') {
           monsters[i].draw(t);
         }
 
@@ -3765,8 +4177,8 @@
           }
         }
 
-        // Don't remove caught monsters - metal wave handles their lifecycle
-        if (monsters[i].state === 'caught') continue;
+        // Don't remove caught/venom monsters - their systems handle lifecycle
+        if (monsters[i].state === 'caught' || monsters[i].state === 'venom' || monsters[i].state === 'venomDead') continue;
         if (monsters[i].opacity <= 0 || monsters[i].y < -200 || monsters[i].x < -200 || monsters[i].x > W + 200) {
           monsters.splice(i, 1);
         }
