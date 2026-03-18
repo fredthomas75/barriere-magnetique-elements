@@ -3271,30 +3271,42 @@
         const huntTime = cobraTimer - 60;
         const orbitAngle = Math.PI * 0.3 + huntTime * 0.015;
 
-        // Find closest approaching monster
-        let closest = null;
-        let closestDist = Infinity;
-        for (const m of monsters) {
-          if (m.state !== 'approaching' && m.state !== 'idle') continue;
-          if (cobraBittenMonsters.some(b => b.monster === m)) continue;
-          const dx = m.x - (cobraPath[0]?.x || centerX);
-          const dy = m.y - (cobraPath[0]?.y || centerY);
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < closestDist) { closestDist = d; closest = m; }
+        // Default to patrol position
+        let headX = centerX + Math.cos(orbitAngle) * barrierOuterR;
+        let headY = (centerY + 20) + Math.sin(orbitAngle) * barrierOuterR * 0.55;
+
+        // Validate current strike target still exists
+        if (cobraStriking && cobraTarget) {
+          if (!monsters.includes(cobraTarget) || (cobraTarget.state !== 'approaching' && cobraTarget.state !== 'idle' && cobraTarget.state !== 'venom')) {
+            cobraStriking = false;
+            cobraTarget = null;
+          }
         }
 
-        let headX, headY;
-        if (closest && closestDist < 200 && !cobraStriking) {
-          // Strike at monster!
-          cobraStriking = true;
-          cobraStrikeTimer = 0;
-          cobraTarget = closest;
+        // Find closest approaching monster
+        if (!cobraStriking) {
+          let closest = null;
+          let closestDist = Infinity;
+          for (const m of monsters) {
+            if (m.state !== 'approaching' && m.state !== 'idle') continue;
+            if (cobraBittenMonsters.some(b => b.monster === m)) continue;
+            const dx = m.x - (cobraPath[0]?.x || centerX);
+            const dy = m.y - (cobraPath[0]?.y || centerY);
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < closestDist) { closestDist = d; closest = m; }
+          }
+
+          if (closest && closestDist < 200) {
+            cobraStriking = true;
+            cobraStrikeTimer = 0;
+            cobraTarget = closest;
+          }
         }
 
         if (cobraStriking && cobraTarget) {
           cobraStrikeTimer++;
-          const strikeProg = Math.min(1, cobraStrikeTimer / 12); // fast lunge
-          const prevHead = cobraPath[0] || { x: centerX, y: centerY };
+          const strikeProg = Math.min(1, cobraStrikeTimer / 12);
+          const prevHead = cobraPath[0] || { x: headX, y: headY };
           headX = prevHead.x + (cobraTarget.x - prevHead.x) * strikeProg;
           headY = prevHead.y + (cobraTarget.y - prevHead.y) * strikeProg;
           cobraHeadAngle = Math.atan2(cobraTarget.y - prevHead.y, cobraTarget.x - prevHead.x);
@@ -3303,19 +3315,15 @@
           const hitDx = headX - cobraTarget.x;
           const hitDy = headY - cobraTarget.y;
           if (Math.sqrt(hitDx * hitDx + hitDy * hitDy) < 25) {
-            // Bite! Monster is now venom-paralyzed
             cobraTarget.state = 'venom';
             cobraTarget.venomTimer = 0;
             cobraBittenMonsters.push({ monster: cobraTarget, timer: 0 });
             cobraStriking = false;
             cobraTarget = null;
 
-            // Venom bite particles
             for (let i = 0; i < 15; i++) {
               impactParticles.push(new ImpactParticle(headX, headY, 'rgba(0, 255, 50, 1)'));
             }
-
-            // Bite sound
             try {
               const actx = new (window.AudioContext || window.webkitAudioContext)();
               const osc = actx.createOscillator();
@@ -3328,23 +3336,27 @@
               osc.start(); osc.stop(actx.currentTime + 0.3);
             } catch(e) {}
           }
+
+          // Abort strike if taking too long
+          if (cobraStrikeTimer > 30) {
+            cobraStriking = false;
+            cobraTarget = null;
+          }
         } else {
           // Patrol orbit
-          headX = centerX + Math.cos(orbitAngle) * barrierOuterR;
-          headY = (centerY + 20) + Math.sin(orbitAngle) * barrierOuterR * 0.55;
           const prev = cobraPath[0] || { x: headX, y: headY };
           cobraHeadAngle = Math.atan2(headY - prev.y, headX - prev.x);
-          cobraStriking = false;
         }
 
         cobraPath.unshift({ x: headX, y: headY });
         if (cobraPath.length > COBRA_SEGMENTS) cobraPath.pop();
       } else {
-        // Exit phase — slither off screen
-        const exitProg = (cobraTimer - 380) / 100;
+        // Exit phase — slither off screen at constant speed
         if (cobraPath.length > 0) {
-          const headX = cobraPath[0].x + exitProg * 150;
-          const headY = cobraPath[0].y + exitProg * 100;
+          const exitSpeed = 8;
+          const exitAngle = Math.PI * 0.25; // toward bottom-right
+          const headX = cobraPath[0].x + Math.cos(exitAngle) * exitSpeed;
+          const headY = cobraPath[0].y + Math.sin(exitAngle) * exitSpeed;
           cobraPath.unshift({ x: headX, y: headY });
           if (cobraPath.length > COBRA_SEGMENTS) cobraPath.pop();
         }
@@ -3353,8 +3365,15 @@
       // Update bitten monsters: paralyze → fly to space
       for (let i = cobraBittenMonsters.length - 1; i >= 0; i--) {
         const bm = cobraBittenMonsters[i];
-        bm.timer++;
         const m = bm.monster;
+
+        // Safety: if monster was removed by another system, clean up
+        if (!monsters.includes(m)) {
+          cobraBittenMonsters.splice(i, 1);
+          continue;
+        }
+
+        bm.timer++;
 
         if (bm.timer < 90) {
           // Paralyzed — shake in place, turn green
@@ -3377,7 +3396,6 @@
           }
 
           if (m.y < -100 || m.opacity <= 0) {
-            // Remove monster
             const idx = monsters.indexOf(m);
             if (idx >= 0) {
               monsters.splice(idx, 1);
@@ -3390,11 +3408,10 @@
         }
       }
 
-      // End cobra
-      if (cobraTimer >= COBRA_DURATION) {
+      // End cobra — but wait for all bitten monsters to finish
+      if (cobraTimer >= COBRA_DURATION && cobraBittenMonsters.length === 0) {
         cobraActive = false;
         cobraPath = [];
-        cobraBittenMonsters = [];
         document.getElementById('btnCobra').classList.remove('cobra-active');
       }
     }
@@ -3548,6 +3565,7 @@
       // Draw bitten monsters with green tint
       for (const bm of cobraBittenMonsters) {
         const m = bm.monster;
+        if (!m || !monsters.includes(m)) continue;
         if (bm.timer < 90) {
           // Green poison overlay on paralyzed monster
           ctx.save();
