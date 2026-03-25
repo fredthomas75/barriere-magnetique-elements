@@ -274,6 +274,37 @@
       50% { transform: scale(1.15); box-shadow: 0 0 70px rgba(255,255,255,0.9), 0 0 120px rgba(0,200,255,0.8); }
     }
 
+    .btn-fishwave {
+      background: linear-gradient(135deg, #0055aa, #00aadd, #44ddff, #0088cc, #006699, #00ccee);
+      background-size: 500% 500%;
+      color: #001833;
+      font-size: clamp(10px, 1.8vw, 13px);
+      font-weight: 800;
+      text-shadow: 0 1px 3px rgba(100,200,255,0.4);
+      box-shadow: 0 0 25px rgba(0,120,200,0.4), 0 0 50px rgba(0,180,255,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: fishShine 3s ease infinite;
+      display: none;
+      border: 2px solid rgba(0,180,255,0.4);
+    }
+    .btn-fishwave:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px rgba(0,150,255,0.6), 0 0 70px rgba(0,200,255,0.4);
+    }
+    .btn-fishwave:active { transform: scale(0.95); }
+    .btn-fishwave.fishwave-active {
+      animation: fishShine 0.4s ease infinite, fishPulse 0.5s ease infinite;
+      border-color: #44eeff;
+    }
+    @keyframes fishShine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes fishPulse {
+      0%, 100% { transform: scale(1.02); }
+      50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,180,255,0.7), 0 0 80px rgba(0,220,255,0.4); }
+    }
+
     .btn-metalwave {
       background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
       background-size: 400% 400%;
@@ -556,6 +587,9 @@
     </button>
     <button class="btn btn-lightning" id="btnLightning" onclick="triggerLightningStorm()">
       ⚡ BOOST ÉLECTRIQUE ⚡
+    </button>
+    <button class="btn btn-fishwave" id="btnFishWave" onclick="triggerFishWave()">
+      🐟 VAGUE DU POISSON 🐟
     </button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
@@ -1180,6 +1214,7 @@
       update(t) {
         if (this.state === 'caught') return; // Metal wave controls position
         if (this.state === 'venom' || this.state === 'venomDead') return; // Cobra controls position
+        if (this.state === 'floating') return; // Fish wave controls position
         if (this.state === 'approaching') {
           const dx = centerX - this.x;
           const dy = (centerY + 20) - this.y;
@@ -3116,6 +3151,7 @@
       document.getElementById('btnSuperBoost').style.display = 'block';
       document.getElementById('btnCobra').style.display = 'block';
       document.getElementById('btnLightning').style.display = 'block';
+      document.getElementById('btnFishWave').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
 
@@ -3143,6 +3179,8 @@
       document.getElementById('btnCobra').classList.remove('cobra-active');
       document.getElementById('btnLightning').style.display = 'none';
       document.getElementById('btnLightning').classList.remove('lightning-active');
+      document.getElementById('btnFishWave').style.display = 'none';
+      document.getElementById('btnFishWave').classList.remove('fishwave-active');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
       document.getElementById('btnUltraBoost').style.display = 'none';
@@ -3151,6 +3189,10 @@
       cobraActive = false;
       lightningActive = false;
       lightningBolts = [];
+      fishWaveActive = false;
+      fishWaveFish = [];
+      waterLevel = 0;
+      floatingMonsters = [];
 
       // Remove all monsters
       monsters.length = 0;
@@ -3978,6 +4020,406 @@
       ctx.restore();
     }
 
+    // ===== VAGUE DU POISSON =====
+    let fishWaveActive = false;
+    let fishWaveTimer = 0;
+    const FISHWAVE_DURATION = 540; // ~9 seconds
+    let waterLevel = 0; // 0 to 1 — how high the water is
+    let fishWaveFish = []; // animated fish
+    let floatingMonsters = []; // monsters caught in the flood
+
+    function triggerFishWave() {
+      if (fishWaveActive) return;
+      fishWaveActive = true;
+      fishWaveTimer = 0;
+      waterLevel = 0;
+      fishWaveFish = [];
+      floatingMonsters = [];
+      document.getElementById('btnFishWave').classList.add('fishwave-active');
+
+      // Spawn fish
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = barrierRadius + 40 + Math.random() * 80;
+        fishWaveFish.push({
+          x: centerX + Math.cos(angle) * dist,
+          y: (centerY + 20) + Math.sin(angle) * dist * 0.55,
+          angle: angle,
+          speed: 2 + Math.random() * 2,
+          size: 12 + Math.random() * 8,
+          color: ['#ff6600', '#ffaa00', '#ff4444', '#00cc66', '#4488ff', '#ff00aa'][i],
+          wobble: Math.random() * Math.PI * 2,
+          hunting: false,
+          target: null,
+          biteTimer: 0
+        });
+      }
+
+      // Water rush sound
+      try {
+        initAudio();
+        if (audioCtx) {
+          const bufSize = audioCtx.sampleRate * 3;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t = i / audioCtx.sampleRate;
+            const env = Math.min(1, t * 2) * Math.exp(-t * 0.5);
+            d[i] = (Math.random() * 2 - 1) * env * 0.15;
+            d[i] += Math.sin(t * 30 + Math.sin(t * 5) * 4) * env * 0.08;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const lp = audioCtx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 400;
+          const g = audioCtx.createGain();
+          g.gain.value = 0.3;
+          src.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+          src.start();
+        }
+      } catch(e) {}
+    }
+
+    function updateFishWave(t) {
+      if (!fishWaveActive) return;
+      fishWaveTimer++;
+
+      // Phase 1 (0-90): water rises
+      if (fishWaveTimer < 90) {
+        waterLevel = Math.min(1, fishWaveTimer / 80);
+        // Catch approaching monsters in flood
+        if (waterLevel > 0.3) {
+          for (const m of monsters) {
+            if (m.state !== 'approaching' && m.state !== 'idle') continue;
+            if (floatingMonsters.some(f => f.monster === m)) continue;
+            // Monsters outside the barrier get caught
+            const bx = m.x - centerX;
+            const by = (m.y - (centerY + 20)) / 0.55;
+            const bDist = Math.sqrt(bx * bx + by * by);
+            if (bDist > barrierRadius - 10) {
+              m.state = 'floating';
+              floatingMonsters.push({
+                monster: m,
+                bobPhase: Math.random() * Math.PI * 2,
+                bobAmp: 2 + Math.random() * 3,
+                baseY: m.y,
+                timer: 0,
+                eaten: false
+              });
+            }
+          }
+        }
+      }
+
+      // Phase 2 (90-400): fish hunt floating monsters
+      if (fishWaveTimer >= 60 && fishWaveTimer < 420) {
+        for (const fish of fishWaveFish) {
+          fish.wobble += 0.08;
+
+          // Find a floating monster to hunt
+          if (!fish.hunting || !fish.target || fish.target.eaten) {
+            fish.hunting = false;
+            fish.target = null;
+            let closest = null;
+            let closestDist = Infinity;
+            for (const fm of floatingMonsters) {
+              if (fm.eaten) continue;
+              if (!monsters.includes(fm.monster)) continue;
+              const dx = fm.monster.x - fish.x;
+              const dy = fm.monster.y - fish.y;
+              const d = Math.sqrt(dx * dx + dy * dy);
+              // Don't target what another fish is already hunting
+              const taken = fishWaveFish.some(f => f !== fish && f.target === fm);
+              if (d < closestDist && !taken) {
+                closestDist = d;
+                closest = fm;
+              }
+            }
+            if (closest) {
+              fish.hunting = true;
+              fish.target = closest;
+            }
+          }
+
+          if (fish.hunting && fish.target && monsters.includes(fish.target.monster)) {
+            const m = fish.target.monster;
+            const dx = m.x - fish.x;
+            const dy = m.y - fish.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            fish.angle = Math.atan2(dy, dx);
+            fish.x += Math.cos(fish.angle) * fish.speed * 1.5;
+            fish.y += Math.sin(fish.angle) * fish.speed * 1.5;
+
+            // Bite!
+            if (d < 25) {
+              fish.biteTimer = 20;
+              fish.target.eaten = true;
+              // Monster sinks and dies
+              m.state = 'hit';
+              m.hitTime = performance.now();
+              m.flyVx = (Math.random() - 0.5) * 3;
+              m.flyVy = 3 + Math.random() * 2; // sink downward first
+              m.flyRotSpeed = (Math.random() - 0.5) * 0.3;
+              monstersDefeated++;
+              document.getElementById('monsterCount').textContent = monstersDefeated;
+              shakeAmount = 5;
+
+              // Water splash particles
+              for (let p = 0; p < 20; p++) {
+                impactParticles.push(new ImpactParticle(
+                  m.x + (Math.random() - 0.5) * 20,
+                  m.y + (Math.random() - 0.5) * 20,
+                  `rgba(${50 + Math.random() * 100}, ${150 + Math.random() * 105}, 255, 1)`
+                ));
+              }
+
+              // Splash sound
+              try {
+                if (audioCtx) {
+                  const bufSize = audioCtx.sampleRate * 0.3;
+                  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+                  const dd = buf.getChannelData(0);
+                  for (let i = 0; i < bufSize; i++) {
+                    dd[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 4) * 0.2;
+                  }
+                  const src = audioCtx.createBufferSource();
+                  src.buffer = buf;
+                  const lp = audioCtx.createBiquadFilter();
+                  lp.type = 'lowpass';
+                  lp.frequency.value = 600;
+                  const g = audioCtx.createGain();
+                  g.gain.value = 0.2;
+                  src.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+                  src.start();
+                }
+              } catch(e) {}
+
+              fish.hunting = false;
+              fish.target = null;
+            }
+          } else {
+            // Swim around in the water
+            fish.x += Math.cos(fish.angle) * fish.speed;
+            fish.y += Math.sin(fish.wobble) * 1.5;
+            // Keep fish in the water area
+            const fx = fish.x - centerX;
+            const fy = (fish.y - (centerY + 20)) / 0.55;
+            const fDist = Math.sqrt(fx * fx + fy * fy);
+            if (fDist < barrierRadius + 10 || fDist > barrierRadius + 150) {
+              fish.angle += 0.1;
+            }
+          }
+
+          if (fish.biteTimer > 0) fish.biteTimer--;
+        }
+      }
+
+      // Update floating monsters
+      for (let i = floatingMonsters.length - 1; i >= 0; i--) {
+        const fm = floatingMonsters[i];
+        if (!monsters.includes(fm.monster)) {
+          floatingMonsters.splice(i, 1);
+          continue;
+        }
+        fm.timer++;
+        if (!fm.eaten) {
+          // Bob up and down
+          fm.monster.x += Math.sin(fm.timer * 0.03) * 0.5;
+          fm.monster.y = fm.baseY + Math.sin(fm.bobPhase + fm.timer * 0.06) * fm.bobAmp;
+        }
+      }
+
+      // Phase 3 (400+): water recedes
+      if (fishWaveTimer >= 400) {
+        waterLevel = Math.max(0, 1 - (fishWaveTimer - 400) / 100);
+      }
+
+      // End
+      if (fishWaveTimer >= FISHWAVE_DURATION) {
+        fishWaveActive = false;
+        fishWaveFish = [];
+        waterLevel = 0;
+        // Release any remaining floating monsters
+        for (const fm of floatingMonsters) {
+          if (monsters.includes(fm.monster) && fm.monster.state === 'floating') {
+            fm.monster.state = 'approaching';
+          }
+        }
+        floatingMonsters = [];
+        document.getElementById('btnFishWave').classList.remove('fishwave-active');
+      }
+    }
+
+    function drawFishWave(t) {
+      if (!fishWaveActive && waterLevel <= 0) return;
+
+      ctx.save();
+
+      // Draw water around the house
+      if (waterLevel > 0) {
+        const waterH = H * 0.4 * waterLevel; // water covers bottom portion
+        const waterTop = H - waterH;
+
+        // Water body - translucent blue with wave pattern
+        ctx.save();
+        ctx.globalAlpha = 0.45 * waterLevel;
+
+        // Multiple wave layers
+        for (let layer = 0; layer < 3; layer++) {
+          const layerOffset = layer * 8;
+          const waveSpeed = t * 0.001 * (1 + layer * 0.3);
+          const waveAmp = 6 + layer * 3;
+
+          ctx.beginPath();
+          ctx.moveTo(0, H);
+          for (let x = 0; x <= W; x += 4) {
+            const waveY = waterTop + layerOffset +
+              Math.sin(x * 0.015 + waveSpeed) * waveAmp +
+              Math.sin(x * 0.008 + waveSpeed * 0.7) * waveAmp * 0.6;
+            if (x === 0) ctx.moveTo(x, waveY);
+            else ctx.lineTo(x, waveY);
+          }
+          ctx.lineTo(W, H);
+          ctx.lineTo(0, H);
+          ctx.closePath();
+
+          const waterGrad = ctx.createLinearGradient(0, waterTop, 0, H);
+          const baseBlue = daylight > 0.5 ? [30, 100, 180] : [10, 30, 70];
+          const deepBlue = daylight > 0.5 ? [10, 50, 120] : [5, 15, 45];
+          waterGrad.addColorStop(0, `rgba(${baseBlue[0]}, ${baseBlue[1]}, ${baseBlue[2]}, 0.5)`);
+          waterGrad.addColorStop(0.5, `rgba(${(baseBlue[0] + deepBlue[0]) / 2}, ${(baseBlue[1] + deepBlue[1]) / 2}, ${(baseBlue[2] + deepBlue[2]) / 2}, 0.6)`);
+          waterGrad.addColorStop(1, `rgba(${deepBlue[0]}, ${deepBlue[1]}, ${deepBlue[2]}, 0.7)`);
+          ctx.fillStyle = waterGrad;
+          ctx.fill();
+        }
+
+        // Sparkles/highlights on water surface
+        ctx.globalAlpha = 0.6 * waterLevel;
+        for (let i = 0; i < 20; i++) {
+          const sx = (i * 73.7 + t * 0.02) % W;
+          const sy = waterTop + 5 + Math.sin(sx * 0.02 + t * 0.001) * 8;
+          const sparkleSize = 1 + Math.sin(t * 0.003 + i * 1.7) * 1;
+          if (sparkleSize > 0.5) {
+            ctx.beginPath();
+            ctx.arc(sx, sy, sparkleSize, 0, Math.PI * 2);
+            ctx.fillStyle = daylight > 0.5 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(100, 150, 200, 0.6)';
+            ctx.fill();
+          }
+        }
+
+        // Ripple rings around floating monsters
+        for (const fm of floatingMonsters) {
+          if (!fm.eaten && monsters.includes(fm.monster)) {
+            const m = fm.monster;
+            ctx.save();
+            ctx.globalAlpha = 0.3 * waterLevel;
+            ctx.strokeStyle = 'rgba(150, 200, 255, 0.5)';
+            ctx.lineWidth = 1;
+            for (let r = 0; r < 3; r++) {
+              const rippleR = 10 + r * 12 + Math.sin(fm.timer * 0.05 + r) * 4;
+              ctx.beginPath();
+              ctx.ellipse(m.x, m.y + m.size * 0.3, rippleR, rippleR * 0.4, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+
+        ctx.restore();
+      }
+
+      // Draw fish
+      for (const fish of fishWaveFish) {
+        ctx.save();
+        ctx.translate(fish.x, fish.y);
+        ctx.rotate(fish.angle);
+
+        const s = fish.size;
+        const biting = fish.biteTimer > 0;
+
+        // Body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, s, s * 0.45, 0, 0, Math.PI * 2);
+        ctx.fillStyle = fish.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Belly (lighter)
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.1, s * 0.7, s * 0.2, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fill();
+
+        // Tail
+        ctx.beginPath();
+        ctx.moveTo(-s, 0);
+        const tailWag = Math.sin(t * 0.01 + fish.wobble) * 0.3;
+        ctx.lineTo(-s * 1.5, -s * 0.5 + tailWag * s);
+        ctx.lineTo(-s * 1.5, s * 0.5 + tailWag * s);
+        ctx.closePath();
+        ctx.fillStyle = fish.color;
+        ctx.fill();
+
+        // Dorsal fin
+        ctx.beginPath();
+        ctx.moveTo(s * 0.2, -s * 0.4);
+        ctx.lineTo(-s * 0.2, -s * 0.7);
+        ctx.lineTo(-s * 0.4, -s * 0.35);
+        ctx.closePath();
+        ctx.fillStyle = fish.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Eye
+        ctx.beginPath();
+        ctx.arc(s * 0.5, -s * 0.1, s * 0.15, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(s * 0.55, -s * 0.1, s * 0.08, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+
+        // Mouth
+        if (biting) {
+          // Open mouth
+          ctx.beginPath();
+          ctx.arc(s * 0.8, s * 0.05, s * 0.2, -0.5, 0.5);
+          ctx.fillStyle = '#cc0000';
+          ctx.fill();
+          // Teeth
+          ctx.fillStyle = '#fff';
+          for (let tt = 0; tt < 3; tt++) {
+            const ta = -0.3 + tt * 0.3;
+            ctx.fillRect(s * 0.8 + Math.cos(ta) * s * 0.18, s * 0.05 + Math.sin(ta) * s * 0.18 - 1, 2, 3);
+          }
+        }
+
+        // Bubbles behind the fish
+        if (Math.random() < 0.3) {
+          ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath();
+          ctx.arc(
+            fish.x - Math.cos(fish.angle) * s * 1.5 + (Math.random() - 0.5) * 10,
+            fish.y - Math.sin(fish.angle) * s * 1.5 + (Math.random() - 0.5) * 10,
+            1 + Math.random() * 3, 0, Math.PI * 2
+          );
+          ctx.fillStyle = 'rgba(200, 230, 255, 0.6)';
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     // ===== ULTRA BOOST =====
     function triggerUltraBoost() {
       if (!barrierActive || ultraBoostActive) return;
@@ -4172,6 +4614,7 @@
     document.getElementById('btnMetalWave').style.display = 'none';
     document.getElementById('btnUltraBoost').style.display = 'none';
     document.getElementById('btnLightning').style.display = 'none';
+    document.getElementById('btnFishWave').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -4547,6 +4990,9 @@
         ctx.restore();
       }
 
+      // Fish wave water (behind house)
+      drawFishWave(t);
+
       // House
       drawHouse();
 
@@ -4568,6 +5014,9 @@
 
       // Lightning storm (update here, draw after monsters so bolts are on top)
       updateLightningStorm();
+
+      // Fish wave
+      updateFishWave(t);
 
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
@@ -4596,7 +5045,7 @@
         }
 
         // Don't remove caught/venom monsters - their systems handle lifecycle
-        if (monsters[i].state === 'caught' || monsters[i].state === 'venom' || monsters[i].state === 'venomDead') continue;
+        if (monsters[i].state === 'caught' || monsters[i].state === 'venom' || monsters[i].state === 'venomDead' || monsters[i].state === 'floating') continue;
         if (monsters[i].opacity <= 0 || monsters[i].y < -200 || monsters[i].x < -200 || monsters[i].x > W + 200) {
           monsters.splice(i, 1);
         }
