@@ -238,6 +238,42 @@
       100% { background-position: 0% 50%; }
     }
 
+    .btn-lightning {
+      background: linear-gradient(135deg, #0044ff, #00ccff, #ffffff, #00ccff, #4400ff, #00eeff);
+      background-size: 600% 600%;
+      color: #000022;
+      font-size: clamp(10px, 1.8vw, 13px);
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(100,200,255,0.6);
+      box-shadow: 0 0 30px rgba(0,150,255,0.5), 0 0 60px rgba(0,200,255,0.3), inset 0 0 15px rgba(255,255,255,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: lightningShine 2s ease infinite;
+      display: none;
+      border: 2px solid rgba(100,200,255,0.6);
+    }
+    .btn-lightning:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 50px rgba(0,150,255,0.8), 0 0 90px rgba(0,200,255,0.5), inset 0 0 20px rgba(255,255,255,0.3);
+    }
+    .btn-lightning:active { transform: scale(0.95); }
+    .btn-lightning.lightning-active {
+      animation: lightningShine 0.15s ease infinite, lightningFlash 0.1s ease infinite;
+      border-color: #fff;
+      color: #fff;
+      text-shadow: 0 0 15px #fff, 0 0 30px #00ccff;
+    }
+    @keyframes lightningShine {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 100% 0%; }
+      50% { background-position: 50% 100%; }
+      75% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+    @keyframes lightningFlash {
+      0%, 100% { transform: scale(1.05); box-shadow: 0 0 40px rgba(0,150,255,0.9), 0 0 80px rgba(100,200,255,0.6); }
+      50% { transform: scale(1.15); box-shadow: 0 0 70px rgba(255,255,255,0.9), 0 0 120px rgba(0,200,255,0.8); }
+    }
+
     .btn-metalwave {
       background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
       background-size: 400% 400%;
@@ -517,6 +553,9 @@
     </button>
     <button class="btn btn-cobra" id="btnCobra" onclick="triggerCobra()">
       COBRA VENIMEUX
+    </button>
+    <button class="btn btn-lightning" id="btnLightning" onclick="triggerLightningStorm()">
+      ⚡ BOOST ÉLECTRIQUE ⚡
     </button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
@@ -3076,6 +3115,7 @@
       document.getElementById('btnDeactivate').style.display = 'block';
       document.getElementById('btnSuperBoost').style.display = 'block';
       document.getElementById('btnCobra').style.display = 'block';
+      document.getElementById('btnLightning').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
 
@@ -3101,12 +3141,16 @@
       document.getElementById('btnSuperBoost').classList.remove('boosting');
       document.getElementById('btnCobra').style.display = 'none';
       document.getElementById('btnCobra').classList.remove('cobra-active');
+      document.getElementById('btnLightning').style.display = 'none';
+      document.getElementById('btnLightning').classList.remove('lightning-active');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
       document.getElementById('btnUltraBoost').style.display = 'none';
       document.getElementById('btnUltraBoost').classList.remove('ultra-active');
       metalWaveActive = false;
       cobraActive = false;
+      lightningActive = false;
+      lightningBolts = [];
 
       // Remove all monsters
       monsters.length = 0;
@@ -3606,6 +3650,334 @@
       ctx.restore();
     }
 
+    // ===== BOOST ÉLECTRIQUE — LIGHTNING STORM =====
+    let lightningActive = false;
+    let lightningTimer = 0;
+    const LIGHTNING_DURATION = 420; // ~7 seconds at 60fps
+    let lightningBolts = []; // active bolt animations
+    let lightningFlashAlpha = 0; // screen flash
+    let lightningTargetQueue = []; // monsters queued for strikes
+    let lightningKills = 0;
+
+    function triggerLightningStorm() {
+      if (lightningActive) return;
+      lightningActive = true;
+      lightningTimer = 0;
+      lightningBolts = [];
+      lightningKills = 0;
+      lightningTargetQueue = [];
+      lightningFlashAlpha = 0;
+      document.getElementById('btnLightning').classList.add('lightning-active');
+
+      // Thunder sound
+      try {
+        initAudio();
+        if (audioCtx) {
+          // Deep rumbling thunder
+          const bufSize = audioCtx.sampleRate * 2;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t = i / audioCtx.sampleRate;
+            const env = Math.exp(-t * 1.5) * (0.3 + 0.7 * Math.exp(-t * 0.3));
+            data[i] = (Math.random() * 2 - 1) * env * 0.3;
+            // Low rumble
+            data[i] += Math.sin(t * 40 + Math.sin(t * 7) * 3) * env * 0.15;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const lp = audioCtx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 200;
+          lp.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 2);
+          const g = audioCtx.createGain();
+          g.gain.value = 0.4;
+          src.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+          src.start();
+        }
+      } catch(e) {}
+    }
+
+    // Generate a jagged lightning bolt path from sky to target
+    function generateBoltPath(targetX, targetY) {
+      const points = [];
+      const startX = targetX + (Math.random() - 0.5) * 150;
+      const startY = -20;
+      const segments = 12 + Math.floor(Math.random() * 8);
+      points.push({ x: startX, y: startY });
+      for (let i = 1; i < segments; i++) {
+        const t = i / segments;
+        const baseX = startX + (targetX - startX) * t;
+        const baseY = startY + (targetY - startY) * t;
+        const jitter = (1 - t) * 80 + 10; // more jitter at top, less near target
+        points.push({
+          x: baseX + (Math.random() - 0.5) * jitter,
+          y: baseY + (Math.random() - 0.5) * jitter * 0.3
+        });
+      }
+      points.push({ x: targetX, y: targetY });
+
+      // Add 1-2 branches
+      const branches = [];
+      for (let b = 0; b < 1 + Math.floor(Math.random() * 2); b++) {
+        const branchIdx = 2 + Math.floor(Math.random() * (segments - 4));
+        const branchStart = points[branchIdx];
+        const branchLen = 3 + Math.floor(Math.random() * 4);
+        const branchAngle = (Math.random() - 0.5) * 1.2;
+        const bpts = [{ x: branchStart.x, y: branchStart.y }];
+        for (let j = 1; j <= branchLen; j++) {
+          const prev = bpts[j - 1];
+          bpts.push({
+            x: prev.x + Math.cos(branchAngle + Math.PI * 0.5) * (15 + Math.random() * 20) + (Math.random() - 0.5) * 30,
+            y: prev.y + 15 + Math.random() * 20
+          });
+        }
+        branches.push(bpts);
+      }
+
+      return { points, branches };
+    }
+
+    function updateLightningStorm() {
+      if (!lightningActive) return;
+      lightningTimer++;
+
+      // Phase 1 (0-350): strike monsters periodically
+      if (lightningTimer < 350) {
+        // Every 15-25 frames, pick a new target
+        if (lightningTimer % (15 + Math.floor(Math.random() * 10)) === 0) {
+          // Find an alive approaching monster
+          const targets = monsters.filter(m =>
+            m.state === 'approaching' || m.state === 'idle'
+          );
+          if (targets.length > 0) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            const bolt = generateBoltPath(target.x, target.y);
+            bolt.life = 18; // frames the bolt stays visible
+            bolt.maxLife = 18;
+            bolt.target = target;
+            bolt.struck = false;
+            bolt.thickness = 2.5 + Math.random() * 2;
+            lightningBolts.push(bolt);
+            lightningFlashAlpha = 0.6 + Math.random() * 0.3; // screen flash
+
+            // Crack/zap sound for each strike
+            try {
+              if (audioCtx) {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 800 + Math.random() * 2000;
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.15);
+                const g = audioCtx.createGain();
+                g.gain.value = 0.15;
+                g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(g); g.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                // White noise crack
+                const bufSize = audioCtx.sampleRate * 0.1;
+                const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+                const d = buf.getChannelData(0);
+                for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 5);
+                const ns = audioCtx.createBufferSource();
+                ns.buffer = buf;
+                const ng = audioCtx.createGain();
+                ng.gain.value = 0.25;
+                ns.connect(ng); ng.connect(audioCtx.destination);
+                ns.start();
+              }
+            } catch(e) {}
+          }
+        }
+
+        // Also spawn random atmospheric bolts in the sky (no target)
+        if (lightningTimer % 40 === 0 && Math.random() < 0.5) {
+          const skyX = Math.random() * W;
+          const skyY = 50 + Math.random() * H * 0.3;
+          const bolt = generateBoltPath(skyX, skyY);
+          bolt.life = 10;
+          bolt.maxLife = 10;
+          bolt.target = null;
+          bolt.struck = false;
+          bolt.thickness = 1.5 + Math.random();
+          lightningBolts.push(bolt);
+          lightningFlashAlpha = Math.max(lightningFlashAlpha, 0.2);
+        }
+      }
+
+      // Update bolts
+      for (let i = lightningBolts.length - 1; i >= 0; i--) {
+        const bolt = lightningBolts[i];
+        bolt.life--;
+
+        // Strike the monster on frame 2 of the bolt
+        if (!bolt.struck && bolt.life <= bolt.maxLife - 2 && bolt.target) {
+          bolt.struck = true;
+          const m = bolt.target;
+          if (monsters.includes(m) && (m.state === 'approaching' || m.state === 'idle')) {
+            // Electrocute!
+            m.state = 'hit';
+            m.hitTime = performance.now();
+            m.flyVx = (Math.random() - 0.5) * 6;
+            m.flyVy = -8 - Math.random() * 8;
+            m.flyRotSpeed = (Math.random() - 0.5) * 0.5;
+            monstersDefeated++;
+            document.getElementById('monsterCount').textContent = monstersDefeated;
+            lightningKills++;
+            shakeAmount = 8;
+
+            // Electric explosion particles
+            for (let p = 0; p < 25; p++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 2 + Math.random() * 6;
+              const particle = new ImpactParticle(m.x, m.y, 'rgba(100, 200, 255, 1)');
+              particle.vx = Math.cos(angle) * speed;
+              particle.vy = Math.sin(angle) * speed;
+              impactParticles.push(particle);
+            }
+            // Yellow sparks
+            for (let p = 0; p < 15; p++) {
+              impactParticles.push(new ImpactParticle(
+                m.x + (Math.random() - 0.5) * 30,
+                m.y + (Math.random() - 0.5) * 30,
+                'rgba(255, 255, 100, 1)'
+              ));
+            }
+          }
+        }
+
+        if (bolt.life <= 0) lightningBolts.splice(i, 1);
+      }
+
+      // Fade flash
+      lightningFlashAlpha *= 0.85;
+      if (lightningFlashAlpha < 0.01) lightningFlashAlpha = 0;
+
+      // End storm
+      if (lightningTimer >= LIGHTNING_DURATION && lightningBolts.length === 0) {
+        lightningActive = false;
+        lightningBolts = [];
+        document.getElementById('btnLightning').classList.remove('lightning-active');
+      }
+    }
+
+    function drawLightningStorm(t) {
+      if (!lightningActive && lightningBolts.length === 0 && lightningFlashAlpha <= 0) return;
+
+      ctx.save();
+
+      // Draw each bolt
+      for (const bolt of lightningBolts) {
+        const alpha = Math.min(1, bolt.life / (bolt.maxLife * 0.3)); // fade out near end
+        const glow = bolt.life / bolt.maxLife;
+
+        // Outer glow
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.strokeStyle = `rgba(100, 180, 255, 1)`;
+        ctx.lineWidth = bolt.thickness * 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = '#00ccff';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
+        for (let i = 1; i < bolt.points.length; i++) {
+          ctx.lineTo(bolt.points[i].x, bolt.points[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Mid layer
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.strokeStyle = `rgba(180, 220, 255, 1)`;
+        ctx.lineWidth = bolt.thickness * 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
+        for (let i = 1; i < bolt.points.length; i++) {
+          ctx.lineTo(bolt.points[i].x, bolt.points[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Core (white-hot)
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = bolt.thickness;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
+        for (let i = 1; i < bolt.points.length; i++) {
+          ctx.lineTo(bolt.points[i].x, bolt.points[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Draw branches
+        for (const branch of bolt.branches) {
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.strokeStyle = `rgba(150, 200, 255, 1)`;
+          ctx.lineWidth = bolt.thickness * 0.6;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.shadowColor = '#00aaff';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.moveTo(branch[0].x, branch[0].y);
+          for (let i = 1; i < branch.length; i++) {
+            ctx.lineTo(branch[i].x, branch[i].y);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Impact glow at target
+        if (bolt.target && glow > 0.3) {
+          const tp = bolt.points[bolt.points.length - 1];
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.8;
+          const impGrad = ctx.createRadialGradient(tp.x, tp.y, 0, tp.x, tp.y, 40);
+          impGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+          impGrad.addColorStop(0.3, 'rgba(100, 200, 255, 0.6)');
+          impGrad.addColorStop(0.6, 'rgba(50, 100, 255, 0.3)');
+          impGrad.addColorStop(1, 'rgba(0, 50, 200, 0)');
+          ctx.fillStyle = impGrad;
+          ctx.fillRect(tp.x - 40, tp.y - 40, 80, 80);
+
+          // Sparks around impact
+          for (let s = 0; s < 4; s++) {
+            const sa = Math.random() * Math.PI * 2;
+            const sr = 5 + Math.random() * 25;
+            const sx = tp.x + Math.cos(sa) * sr;
+            const sy = tp.y + Math.sin(sa) * sr;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 1 + Math.random() * 2, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, ${150 + Math.random() * 105}, ${alpha})`;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+
+      // Full-screen flash
+      if (lightningFlashAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = lightningFlashAlpha * 0.3;
+        ctx.fillStyle = 'rgba(200, 220, 255, 1)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     // ===== ULTRA BOOST =====
     function triggerUltraBoost() {
       if (!barrierActive || ultraBoostActive) return;
@@ -3650,6 +4022,10 @@
       // Launch cobra
       if (!cobraActive) {
         setTimeout(() => { if (!cobraActive) triggerCobra(); }, 1500);
+      }
+      // Launch lightning storm
+      if (!lightningActive) {
+        setTimeout(() => { if (!lightningActive) triggerLightningStorm(); }, 800);
       }
 
       // Rapid water waves
@@ -3795,6 +4171,7 @@
     document.getElementById('btnSuperBoost').style.display = 'none';
     document.getElementById('btnMetalWave').style.display = 'none';
     document.getElementById('btnUltraBoost').style.display = 'none';
+    document.getElementById('btnLightning').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -4189,6 +4566,9 @@
       updateCobra(t);
       drawCobra(t);
 
+      // Lightning storm (update here, draw after monsters so bolts are on top)
+      updateLightningStorm();
+
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
       barrierAutoFire(t);
@@ -4248,6 +4628,9 @@
         waterWaves[i].draw();
         if (waterWaves[i].life <= 0) waterWaves.splice(i, 1);
       }
+
+      // Lightning storm (drawn on top of everything)
+      drawLightningStorm(t);
 
       // Impact particles
       for (let i = impactParticles.length - 1; i >= 0; i--) {
