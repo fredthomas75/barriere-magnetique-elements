@@ -4262,113 +4262,123 @@
         const bCy = centerY + 20;
         const bRx = barrierRadius;
         const bRy = barrierRadius * 0.55;
+        const wl = waterLevel; // shorthand
 
-        // Water fills the ENTIRE screen except inside the barrier ellipse
-        // Use compositing: draw water everywhere, then cut out the barrier zone
-        for (let layer = 0; layer < 3; layer++) {
-          const layerOffset = layer * 4;
-          const waveSpeed = t * 0.001 * (1 + layer * 0.3);
-          const waveAmp = 4 + layer * 2;
-
-          ctx.save();
-          ctx.globalAlpha = (0.35 + layer * 0.08) * waterLevel;
-
-          // Clip: draw only OUTSIDE the barrier ellipse
-          // We use even-odd fill rule: outer rect + inner ellipse = donut
+        // Helper: create even-odd clip that excludes the barrier interior
+        const clipOutsideBarrier = () => {
           ctx.beginPath();
-          // Outer rectangle (entire canvas)
-          ctx.moveTo(0, 0);
-          ctx.lineTo(W, 0);
-          ctx.lineTo(W, H);
-          ctx.lineTo(0, H);
-          ctx.closePath();
-          // Inner ellipse (barrier zone — will be cut out)
-          // Draw counter-clockwise so even-odd clips it out
-          ctx.moveTo(bCx + bRx + 5, bCy);
-          for (let a = 0; a <= Math.PI * 2; a += 0.05) {
-            const ex = bCx + Math.cos(-a) * (bRx + 5);
-            const ey = bCy + Math.sin(-a) * (bRy + 5);
-            ctx.lineTo(ex, ey);
+          ctx.rect(0, 0, W, H);
+          // Counter-clockwise ellipse for even-odd cutout
+          ctx.moveTo(bCx + bRx + 3, bCy);
+          for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.04) {
+            ctx.lineTo(bCx + Math.cos(-a) * (bRx + 3), bCy + Math.sin(-a) * (bRy + 3));
           }
           ctx.closePath();
           ctx.clip('evenodd');
-
-          // Now draw the water waves (only visible outside barrier)
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(W, 0);
-          ctx.lineTo(W, H);
-          ctx.lineTo(0, H);
-          ctx.closePath();
-
-          const baseBlue = daylight > 0.5 ? [30, 100, 180] : [10, 30, 70];
-          const deepBlue = daylight > 0.5 ? [10, 50, 120] : [5, 15, 45];
-          const waterGrad = ctx.createLinearGradient(0, 0, 0, H);
-          waterGrad.addColorStop(0, `rgba(${baseBlue[0]}, ${baseBlue[1]}, ${baseBlue[2]}, 0.4)`);
-          waterGrad.addColorStop(0.5, `rgba(${(baseBlue[0] + deepBlue[0]) / 2}, ${(baseBlue[1] + deepBlue[1]) / 2}, ${(baseBlue[2] + deepBlue[2]) / 2}, 0.6)`);
-          waterGrad.addColorStop(1, `rgba(${deepBlue[0]}, ${deepBlue[1]}, ${deepBlue[2]}, 0.8)`);
-          ctx.fillStyle = waterGrad;
-          ctx.fill();
-
-          // Animated wave lines across the water surface
-          ctx.strokeStyle = daylight > 0.5
-            ? `rgba(100, 180, 255, ${0.15 * waterLevel})`
-            : `rgba(40, 80, 140, ${0.2 * waterLevel})`;
-          ctx.lineWidth = 1.5;
-          for (let wy = 30 + layerOffset; wy < H; wy += 25 + layer * 10) {
-            ctx.beginPath();
-            for (let x = 0; x <= W; x += 4) {
-              const yOff = Math.sin(x * 0.015 + waveSpeed + wy * 0.01) * waveAmp +
-                Math.sin(x * 0.008 + waveSpeed * 0.7 + wy * 0.005) * waveAmp * 0.6;
-              if (x === 0) ctx.moveTo(x, wy + yOff);
-              else ctx.lineTo(x, wy + yOff);
-            }
-            ctx.stroke();
-          }
-
-          ctx.restore();
         }
 
-        // Water edge glow along the barrier perimeter (where water meets the dry zone)
+        // LAYER 1: Solid deep water base — very visible
         ctx.save();
-        ctx.globalAlpha = 0.5 * waterLevel;
-        ctx.strokeStyle = daylight > 0.5 ? 'rgba(100, 200, 255, 0.6)' : 'rgba(40, 100, 180, 0.5)';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = daylight > 0.5 ? 'rgba(50, 150, 255, 0.5)' : 'rgba(20, 60, 120, 0.4)';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.ellipse(bCx, bCy, bRx + 5, bRy + 5, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        // Animated foam along the edge
-        for (let a = 0; a < Math.PI * 2; a += 0.15) {
-          const foamR = 3 + Math.sin(a * 8 + t * 0.004) * 2;
-          const fx = bCx + Math.cos(a) * (bRx + 6 + foamR);
-          const fy = bCy + Math.sin(a) * (bRy + 6 + foamR);
-          ctx.beginPath();
-          ctx.arc(fx, fy, foamR, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(200, 230, 255, ${0.3 + Math.sin(a * 5 + t * 0.003) * 0.15})`;
-          ctx.fill();
+        clipOutsideBarrier();
+        ctx.globalAlpha = 0.85 * wl;
+        const isDay = daylight > 0.5;
+        const deepGrad = ctx.createLinearGradient(0, 0, 0, H);
+        if (isDay) {
+          deepGrad.addColorStop(0, 'rgb(15, 60, 130)');
+          deepGrad.addColorStop(0.3, 'rgb(20, 80, 160)');
+          deepGrad.addColorStop(0.6, 'rgb(10, 60, 140)');
+          deepGrad.addColorStop(1, 'rgb(5, 30, 80)');
+        } else {
+          deepGrad.addColorStop(0, 'rgb(5, 15, 40)');
+          deepGrad.addColorStop(0.3, 'rgb(8, 25, 60)');
+          deepGrad.addColorStop(0.6, 'rgb(5, 18, 50)');
+          deepGrad.addColorStop(1, 'rgb(2, 8, 25)');
         }
-        ctx.shadowBlur = 0;
+        ctx.fillStyle = deepGrad;
+        ctx.fillRect(0, 0, W, H);
         ctx.restore();
 
-        // Sparkles on water surface (outside barrier)
+        // LAYER 2: Lighter surface shimmer
         ctx.save();
-        ctx.globalAlpha = 0.6 * waterLevel;
-        for (let i = 0; i < 40; i++) {
-          const sx = (i * 73.7 + t * 0.015) % W;
-          const sy = (i * 47.3 + t * 0.01) % H;
-          // Skip sparkles inside barrier
-          const sdx = (sx - bCx) / bRx;
-          const sdy = (sy - bCy) / bRy;
-          if (sdx * sdx + sdy * sdy < 1.1) continue;
-          const sparkleSize = 1.5 + Math.sin(t * 0.003 + i * 1.7) * 1;
-          if (sparkleSize > 0.5) {
+        clipOutsideBarrier();
+        ctx.globalAlpha = 0.3 * wl;
+        const surfGrad = ctx.createLinearGradient(0, 0, 0, H);
+        if (isDay) {
+          surfGrad.addColorStop(0, 'rgb(40, 130, 220)');
+          surfGrad.addColorStop(0.5, 'rgb(30, 100, 190)');
+          surfGrad.addColorStop(1, 'rgb(15, 60, 120)');
+        } else {
+          surfGrad.addColorStop(0, 'rgb(15, 40, 80)');
+          surfGrad.addColorStop(0.5, 'rgb(10, 30, 70)');
+          surfGrad.addColorStop(1, 'rgb(5, 15, 40)');
+        }
+        ctx.fillStyle = surfGrad;
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+
+        // LAYER 3: Animated wave lines (white/light blue horizontal waves)
+        ctx.save();
+        clipOutsideBarrier();
+        const waveSpeed = t * 0.0015;
+        for (let wy = 15; wy < H; wy += 18) {
+          ctx.beginPath();
+          for (let x = 0; x <= W; x += 3) {
+            const yOff = Math.sin(x * 0.012 + waveSpeed + wy * 0.008) * 5 +
+              Math.sin(x * 0.006 + waveSpeed * 1.3 + wy * 0.004) * 3;
+            if (x === 0) ctx.moveTo(x, wy + yOff);
+            else ctx.lineTo(x, wy + yOff);
+          }
+          ctx.strokeStyle = isDay
+            ? `rgba(120, 200, 255, ${(0.25 + Math.sin(wy * 0.05 + waveSpeed) * 0.1) * wl})`
+            : `rgba(40, 90, 150, ${(0.2 + Math.sin(wy * 0.05 + waveSpeed) * 0.08) * wl})`;
+          ctx.lineWidth = 1.5 + Math.sin(wy * 0.03) * 0.5;
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // LAYER 4: Bright sparkles / sun reflections on water
+        ctx.save();
+        ctx.globalAlpha = wl;
+        for (let i = 0; i < 60; i++) {
+          const sx = (i * 73.7 + t * 0.02 + Math.sin(i * 2.1) * 50) % (W + 40) - 20;
+          const sy = (i * 47.3 + t * 0.008 + Math.cos(i * 1.7) * 30) % (H + 40) - 20;
+          const sdx = (sx - bCx) / (bRx + 10);
+          const sdy = (sy - bCy) / (bRy + 10);
+          if (sdx * sdx + sdy * sdy < 1) continue;
+          const sparkle = 2 + Math.sin(t * 0.004 + i * 1.7) * 1.5;
+          if (sparkle > 1) {
             ctx.beginPath();
-            ctx.arc(sx, sy, sparkleSize, 0, Math.PI * 2);
-            ctx.fillStyle = daylight > 0.5 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(100, 150, 200, 0.6)';
+            ctx.arc(sx, sy, sparkle, 0, Math.PI * 2);
+            ctx.fillStyle = isDay ? `rgba(255, 255, 255, ${0.5 + Math.sin(t * 0.005 + i) * 0.3})` : `rgba(100, 160, 220, ${0.3 + Math.sin(t * 0.005 + i) * 0.2})`;
             ctx.fill();
           }
+        }
+        ctx.restore();
+
+        // BARRIER EDGE: foam / water hitting the barrier wall
+        ctx.save();
+        ctx.globalAlpha = 0.9 * wl;
+        // Glowing water edge
+        ctx.strokeStyle = isDay ? 'rgba(150, 220, 255, 0.8)' : 'rgba(60, 120, 180, 0.7)';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = isDay ? 'rgba(80, 180, 255, 0.8)' : 'rgba(30, 80, 150, 0.6)';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.ellipse(bCx, bCy, bRx + 4, bRy + 4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Thick animated foam bubbles along the edge
+        for (let a = 0; a < Math.PI * 2; a += 0.08) {
+          const foamR = 3 + Math.sin(a * 12 + t * 0.005) * 2.5 + Math.sin(a * 7 + t * 0.003) * 1.5;
+          const foamDist = bRx + 5 + foamR + Math.sin(a * 5 + t * 0.004) * 3;
+          const fx = bCx + Math.cos(a) * foamDist;
+          const fy = bCy + Math.sin(a) * (foamDist * bRy / bRx);
+          ctx.beginPath();
+          ctx.arc(fx, fy, foamR, 0, Math.PI * 2);
+          const foamAlpha = 0.4 + Math.sin(a * 9 + t * 0.004) * 0.2;
+          ctx.fillStyle = isDay ? `rgba(220, 240, 255, ${foamAlpha})` : `rgba(80, 120, 160, ${foamAlpha * 0.7})`;
+          ctx.fill();
         }
         ctx.restore();
 
@@ -4377,11 +4387,11 @@
           if (!fm.eaten && monsters.includes(fm.monster)) {
             const m = fm.monster;
             ctx.save();
-            ctx.globalAlpha = 0.35 * waterLevel;
-            ctx.strokeStyle = 'rgba(150, 200, 255, 0.5)';
-            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.5 * wl;
+            ctx.strokeStyle = isDay ? 'rgba(180, 220, 255, 0.6)' : 'rgba(60, 100, 160, 0.5)';
+            ctx.lineWidth = 1.5;
             for (let r = 0; r < 3; r++) {
-              const rippleR = 10 + r * 12 + Math.sin(fm.timer * 0.05 + r) * 4;
+              const rippleR = 12 + r * 14 + Math.sin(fm.timer * 0.05 + r) * 5;
               ctx.beginPath();
               ctx.ellipse(m.x, m.y + m.size * 0.3, rippleR, rippleR * 0.4, 0, 0, Math.PI * 2);
               ctx.stroke();
