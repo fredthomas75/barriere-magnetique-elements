@@ -4262,9 +4262,10 @@
         const bCy = centerY + 20;
         const bRx = barrierRadius;
         const bRy = barrierRadius * 0.55;
-        const wl = waterLevel; // shorthand
+        const wl = waterLevel;
+        const isDay = daylight > 0.5;
 
-        // Helper: create even-odd clip that excludes the barrier interior
+        // Helper: clip to only draw OUTSIDE the barrier ellipse
         const clipOutsideBarrier = () => {
           ctx.beginPath();
           ctx.rect(0, 0, W, H);
@@ -4277,46 +4278,15 @@
           ctx.clip('evenodd');
         }
 
-        // LAYER 1: Solid deep water base — very visible
+        // LAYER 1: Semi-transparent blue tint — visible but see-through
         ctx.save();
         clipOutsideBarrier();
-        ctx.globalAlpha = 0.85 * wl;
-        const isDay = daylight > 0.5;
-        const deepGrad = ctx.createLinearGradient(0, 0, 0, H);
-        if (isDay) {
-          deepGrad.addColorStop(0, 'rgb(15, 60, 130)');
-          deepGrad.addColorStop(0.3, 'rgb(20, 80, 160)');
-          deepGrad.addColorStop(0.6, 'rgb(10, 60, 140)');
-          deepGrad.addColorStop(1, 'rgb(5, 30, 80)');
-        } else {
-          deepGrad.addColorStop(0, 'rgb(5, 15, 40)');
-          deepGrad.addColorStop(0.3, 'rgb(8, 25, 60)');
-          deepGrad.addColorStop(0.6, 'rgb(5, 18, 50)');
-          deepGrad.addColorStop(1, 'rgb(2, 8, 25)');
-        }
-        ctx.fillStyle = deepGrad;
+        ctx.globalAlpha = 0.55 * wl;
+        ctx.fillStyle = isDay ? 'rgb(10, 60, 140)' : 'rgb(5, 20, 55)';
         ctx.fillRect(0, 0, W, H);
         ctx.restore();
 
-        // LAYER 2: Lighter surface shimmer
-        ctx.save();
-        clipOutsideBarrier();
-        ctx.globalAlpha = 0.3 * wl;
-        const surfGrad = ctx.createLinearGradient(0, 0, 0, H);
-        if (isDay) {
-          surfGrad.addColorStop(0, 'rgb(40, 130, 220)');
-          surfGrad.addColorStop(0.5, 'rgb(30, 100, 190)');
-          surfGrad.addColorStop(1, 'rgb(15, 60, 120)');
-        } else {
-          surfGrad.addColorStop(0, 'rgb(15, 40, 80)');
-          surfGrad.addColorStop(0.5, 'rgb(10, 30, 70)');
-          surfGrad.addColorStop(1, 'rgb(5, 15, 40)');
-        }
-        ctx.fillStyle = surfGrad;
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
-
-        // LAYER 3: Animated wave lines (white/light blue horizontal waves)
+        // LAYER 2: Animated wave lines — makes water look alive
         ctx.save();
         clipOutsideBarrier();
         const waveSpeed = t * 0.0015;
@@ -4328,10 +4298,11 @@
             if (x === 0) ctx.moveTo(x, wy + yOff);
             else ctx.lineTo(x, wy + yOff);
           }
+          const wAlpha = (0.4 + Math.sin(wy * 0.05 + waveSpeed) * 0.15) * wl;
           ctx.strokeStyle = isDay
-            ? `rgba(120, 200, 255, ${(0.25 + Math.sin(wy * 0.05 + waveSpeed) * 0.1) * wl})`
-            : `rgba(40, 90, 150, ${(0.2 + Math.sin(wy * 0.05 + waveSpeed) * 0.08) * wl})`;
-          ctx.lineWidth = 1.5 + Math.sin(wy * 0.03) * 0.5;
+            ? `rgba(100, 190, 255, ${wAlpha})`
+            : `rgba(50, 100, 180, ${wAlpha})`;
+          ctx.lineWidth = 2;
           ctx.stroke();
         }
         ctx.restore();
@@ -5062,9 +5033,6 @@
         ctx.restore();
       }
 
-      // Fish wave water (behind house)
-      drawFishWave(t);
-
       // House
       drawHouse();
 
@@ -5149,6 +5117,9 @@
         waterWaves[i].draw();
         if (waterWaves[i].life <= 0) waterWaves.splice(i, 1);
       }
+
+      // Fish wave flood (drawn over everything, clipped outside barrier)
+      drawFishWave(t);
 
       // Lightning storm (drawn on top of everything)
       drawLightningStorm(t);
