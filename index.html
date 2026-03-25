@@ -4256,50 +4256,113 @@
 
       ctx.save();
 
-      // Draw water around the house
+      // Draw flood water surrounding the house — barrier creates a dry island
       if (waterLevel > 0) {
-        const waterH = H * 0.4 * waterLevel; // water covers bottom portion
-        const waterTop = H - waterH;
+        const bCx = centerX;
+        const bCy = centerY + 20;
+        const bRx = barrierRadius;
+        const bRy = barrierRadius * 0.55;
 
-        // Water body - translucent blue with wave pattern
-        ctx.save();
-        ctx.globalAlpha = 0.45 * waterLevel;
-
-        // Multiple wave layers
+        // Water fills the ENTIRE screen except inside the barrier ellipse
+        // Use compositing: draw water everywhere, then cut out the barrier zone
         for (let layer = 0; layer < 3; layer++) {
-          const layerOffset = layer * 8;
+          const layerOffset = layer * 4;
           const waveSpeed = t * 0.001 * (1 + layer * 0.3);
-          const waveAmp = 6 + layer * 3;
+          const waveAmp = 4 + layer * 2;
 
+          ctx.save();
+          ctx.globalAlpha = (0.35 + layer * 0.08) * waterLevel;
+
+          // Clip: draw only OUTSIDE the barrier ellipse
+          // We use even-odd fill rule: outer rect + inner ellipse = donut
           ctx.beginPath();
-          ctx.moveTo(0, H);
-          for (let x = 0; x <= W; x += 4) {
-            const waveY = waterTop + layerOffset +
-              Math.sin(x * 0.015 + waveSpeed) * waveAmp +
-              Math.sin(x * 0.008 + waveSpeed * 0.7) * waveAmp * 0.6;
-            if (x === 0) ctx.moveTo(x, waveY);
-            else ctx.lineTo(x, waveY);
+          // Outer rectangle (entire canvas)
+          ctx.moveTo(0, 0);
+          ctx.lineTo(W, 0);
+          ctx.lineTo(W, H);
+          ctx.lineTo(0, H);
+          ctx.closePath();
+          // Inner ellipse (barrier zone — will be cut out)
+          // Draw counter-clockwise so even-odd clips it out
+          ctx.moveTo(bCx + bRx + 5, bCy);
+          for (let a = 0; a <= Math.PI * 2; a += 0.05) {
+            const ex = bCx + Math.cos(-a) * (bRx + 5);
+            const ey = bCy + Math.sin(-a) * (bRy + 5);
+            ctx.lineTo(ex, ey);
           }
+          ctx.closePath();
+          ctx.clip('evenodd');
+
+          // Now draw the water waves (only visible outside barrier)
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(W, 0);
           ctx.lineTo(W, H);
           ctx.lineTo(0, H);
           ctx.closePath();
 
-          const waterGrad = ctx.createLinearGradient(0, waterTop, 0, H);
           const baseBlue = daylight > 0.5 ? [30, 100, 180] : [10, 30, 70];
           const deepBlue = daylight > 0.5 ? [10, 50, 120] : [5, 15, 45];
-          waterGrad.addColorStop(0, `rgba(${baseBlue[0]}, ${baseBlue[1]}, ${baseBlue[2]}, 0.5)`);
+          const waterGrad = ctx.createLinearGradient(0, 0, 0, H);
+          waterGrad.addColorStop(0, `rgba(${baseBlue[0]}, ${baseBlue[1]}, ${baseBlue[2]}, 0.4)`);
           waterGrad.addColorStop(0.5, `rgba(${(baseBlue[0] + deepBlue[0]) / 2}, ${(baseBlue[1] + deepBlue[1]) / 2}, ${(baseBlue[2] + deepBlue[2]) / 2}, 0.6)`);
-          waterGrad.addColorStop(1, `rgba(${deepBlue[0]}, ${deepBlue[1]}, ${deepBlue[2]}, 0.7)`);
+          waterGrad.addColorStop(1, `rgba(${deepBlue[0]}, ${deepBlue[1]}, ${deepBlue[2]}, 0.8)`);
           ctx.fillStyle = waterGrad;
           ctx.fill();
+
+          // Animated wave lines across the water surface
+          ctx.strokeStyle = daylight > 0.5
+            ? `rgba(100, 180, 255, ${0.15 * waterLevel})`
+            : `rgba(40, 80, 140, ${0.2 * waterLevel})`;
+          ctx.lineWidth = 1.5;
+          for (let wy = 30 + layerOffset; wy < H; wy += 25 + layer * 10) {
+            ctx.beginPath();
+            for (let x = 0; x <= W; x += 4) {
+              const yOff = Math.sin(x * 0.015 + waveSpeed + wy * 0.01) * waveAmp +
+                Math.sin(x * 0.008 + waveSpeed * 0.7 + wy * 0.005) * waveAmp * 0.6;
+              if (x === 0) ctx.moveTo(x, wy + yOff);
+              else ctx.lineTo(x, wy + yOff);
+            }
+            ctx.stroke();
+          }
+
+          ctx.restore();
         }
 
-        // Sparkles/highlights on water surface
+        // Water edge glow along the barrier perimeter (where water meets the dry zone)
+        ctx.save();
+        ctx.globalAlpha = 0.5 * waterLevel;
+        ctx.strokeStyle = daylight > 0.5 ? 'rgba(100, 200, 255, 0.6)' : 'rgba(40, 100, 180, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = daylight > 0.5 ? 'rgba(50, 150, 255, 0.5)' : 'rgba(20, 60, 120, 0.4)';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.ellipse(bCx, bCy, bRx + 5, bRy + 5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Animated foam along the edge
+        for (let a = 0; a < Math.PI * 2; a += 0.15) {
+          const foamR = 3 + Math.sin(a * 8 + t * 0.004) * 2;
+          const fx = bCx + Math.cos(a) * (bRx + 6 + foamR);
+          const fy = bCy + Math.sin(a) * (bRy + 6 + foamR);
+          ctx.beginPath();
+          ctx.arc(fx, fy, foamR, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200, 230, 255, ${0.3 + Math.sin(a * 5 + t * 0.003) * 0.15})`;
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        // Sparkles on water surface (outside barrier)
+        ctx.save();
         ctx.globalAlpha = 0.6 * waterLevel;
-        for (let i = 0; i < 20; i++) {
-          const sx = (i * 73.7 + t * 0.02) % W;
-          const sy = waterTop + 5 + Math.sin(sx * 0.02 + t * 0.001) * 8;
-          const sparkleSize = 1 + Math.sin(t * 0.003 + i * 1.7) * 1;
+        for (let i = 0; i < 40; i++) {
+          const sx = (i * 73.7 + t * 0.015) % W;
+          const sy = (i * 47.3 + t * 0.01) % H;
+          // Skip sparkles inside barrier
+          const sdx = (sx - bCx) / bRx;
+          const sdy = (sy - bCy) / bRy;
+          if (sdx * sdx + sdy * sdy < 1.1) continue;
+          const sparkleSize = 1.5 + Math.sin(t * 0.003 + i * 1.7) * 1;
           if (sparkleSize > 0.5) {
             ctx.beginPath();
             ctx.arc(sx, sy, sparkleSize, 0, Math.PI * 2);
@@ -4307,13 +4370,14 @@
             ctx.fill();
           }
         }
+        ctx.restore();
 
         // Ripple rings around floating monsters
         for (const fm of floatingMonsters) {
           if (!fm.eaten && monsters.includes(fm.monster)) {
             const m = fm.monster;
             ctx.save();
-            ctx.globalAlpha = 0.3 * waterLevel;
+            ctx.globalAlpha = 0.35 * waterLevel;
             ctx.strokeStyle = 'rgba(150, 200, 255, 0.5)';
             ctx.lineWidth = 1;
             for (let r = 0; r < 3; r++) {
@@ -4325,8 +4389,6 @@
             ctx.restore();
           }
         }
-
-        ctx.restore();
       }
 
       // Draw fish
