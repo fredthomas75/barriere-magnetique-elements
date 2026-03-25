@@ -4251,12 +4251,15 @@
       }
     }
 
+    // Offscreen canvas for fish wave water (reused)
+    let _fishOsc = null;
+
     function drawFishWave(t) {
       if (!fishWaveActive && waterLevel <= 0) return;
 
       ctx.save();
 
-      // Draw flood water surrounding the house — barrier creates a dry island
+      // Draw flood water surrounding the house — use offscreen canvas + destination-out
       if (waterLevel > 0) {
         const bCx = centerX;
         const bCy = centerY + 20;
@@ -4265,49 +4268,50 @@
         const wl = waterLevel;
         const isDay = daylight > 0.5;
 
-        // Helper: clip to only draw OUTSIDE the barrier ellipse
-        const clipOutsideBarrier = () => {
-          ctx.beginPath();
-          ctx.rect(0, 0, W, H);
-          // Counter-clockwise ellipse for even-odd cutout
-          ctx.moveTo(bCx + bRx + 3, bCy);
-          for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.04) {
-            ctx.lineTo(bCx + Math.cos(-a) * (bRx + 3), bCy + Math.sin(-a) * (bRy + 3));
-          }
-          ctx.closePath();
-          ctx.clip('evenodd');
+        // Create/resize offscreen canvas
+        if (!_fishOsc || _fishOsc.width !== W || _fishOsc.height !== H) {
+          _fishOsc = document.createElement('canvas');
+          _fishOsc.width = W;
+          _fishOsc.height = H;
         }
+        const ox = _fishOsc.getContext('2d');
+        ox.clearRect(0, 0, W, H);
 
-        // LAYER 1: Semi-transparent blue tint — visible but see-through
-        ctx.save();
-        clipOutsideBarrier();
-        ctx.globalAlpha = 0.55 * wl;
-        ctx.fillStyle = isDay ? 'rgb(10, 60, 140)' : 'rgb(5, 20, 55)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
+        // Draw water on offscreen canvas
+        ox.fillStyle = isDay ? 'rgba(10, 60, 140, 0.6)' : 'rgba(5, 20, 55, 0.6)';
+        ox.fillRect(0, 0, W, H);
 
-        // LAYER 2: Animated wave lines — makes water look alive
-        ctx.save();
-        clipOutsideBarrier();
+        // Wave lines
         const waveSpeed = t * 0.0015;
-        for (let wy = 15; wy < H; wy += 18) {
-          ctx.beginPath();
-          for (let x = 0; x <= W; x += 3) {
+        for (let wy = 10; wy < H; wy += 14) {
+          ox.beginPath();
+          for (let x = 0; x <= W; x += 5) {
             const yOff = Math.sin(x * 0.012 + waveSpeed + wy * 0.008) * 5 +
               Math.sin(x * 0.006 + waveSpeed * 1.3 + wy * 0.004) * 3;
-            if (x === 0) ctx.moveTo(x, wy + yOff);
-            else ctx.lineTo(x, wy + yOff);
+            if (x === 0) ox.moveTo(x, wy + yOff);
+            else ox.lineTo(x, wy + yOff);
           }
-          const wAlpha = (0.4 + Math.sin(wy * 0.05 + waveSpeed) * 0.15) * wl;
-          ctx.strokeStyle = isDay
-            ? `rgba(100, 190, 255, ${wAlpha})`
-            : `rgba(50, 100, 180, ${wAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
+          ox.strokeStyle = isDay
+            ? `rgba(100, 190, 255, ${0.3 + Math.sin(wy * 0.05 + waveSpeed) * 0.1})`
+            : `rgba(50, 100, 180, ${0.25 + Math.sin(wy * 0.05 + waveSpeed) * 0.08})`;
+          ox.lineWidth = 2;
+          ox.stroke();
         }
-        ctx.restore();
 
-        // LAYER 4: Bright sparkles / sun reflections on water
+        // Erase barrier ellipse (dry zone) with destination-out
+        ox.save();
+        ox.globalCompositeOperation = 'destination-out';
+        ox.beginPath();
+        ox.ellipse(bCx, bCy, bRx + 5, bRy + 5, 0, 0, Math.PI * 2);
+        ox.fill();
+        ox.restore();
+
+        // Composite onto main canvas
+        ctx.globalAlpha = wl;
+        ctx.drawImage(_fishOsc, 0, 0);
+        ctx.globalAlpha = 1;
+
+        // Sparkles on water surface (skip inside barrier)
         ctx.save();
         ctx.globalAlpha = wl;
         for (let i = 0; i < 60; i++) {
