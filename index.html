@@ -4345,7 +4345,7 @@
 
         // Thick animated foam bubbles along the edge
         for (let a = 0; a < Math.PI * 2; a += 0.08) {
-          const foamR = 3 + Math.sin(a * 12 + t * 0.005) * 2.5 + Math.sin(a * 7 + t * 0.003) * 1.5;
+          const foamR = Math.max(1, 3 + Math.sin(a * 12 + t * 0.005) * 2.5 + Math.sin(a * 7 + t * 0.003) * 1.5);
           const foamDist = bRx + 5 + foamR + Math.sin(a * 5 + t * 0.004) * 3;
           const fx = bCx + Math.cos(a) * foamDist;
           const fy = bCy + Math.sin(a) * (foamDist * bRy / bRx);
