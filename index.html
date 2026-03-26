@@ -4802,6 +4802,7 @@
 
     // ===== MAIN LOOP =====
     function gameLoop(t) {
+      try {
       // Smoothly interpolate weather values (avoid sudden changes)
       const wLerp = 0.02; // slow interpolation
       weatherSmooth.cloudCover += (weather.cloudCover - weatherSmooth.cloudCover) * wLerp;
@@ -5143,6 +5144,7 @@
       }
 
       ctx.restore();
+      } catch(e) { console.error('gameLoop error:', e); }
       requestAnimationFrame(gameLoop);
     }
 
