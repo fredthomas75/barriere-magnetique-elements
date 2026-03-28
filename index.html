@@ -4534,8 +4534,8 @@
           y: (centerY + 20) + Math.sin(angle) * dist * 0.55,
           angle: angle,
           speed: 2.5 + Math.random() * 1.5,
-          size: 22 + Math.random() * 10,
-          color: ['#4a6a7a', '#3a5a6a', '#5a7a8a', '#2a4a5a'][i],
+          size: 35 + Math.random() * 15,
+          color: ['#3a4e5e', '#2e4450', '#4a5e6e', '#1e3040'][i],
           wobble: Math.random() * Math.PI * 2,
           hunting: false,
           target: null,
@@ -4987,7 +4987,7 @@
         }
       }
 
-      // Draw sharks
+      // Draw sharks - ferocious great whites
       for (const shark of sharkWaveSharks) {
         ctx.save();
         ctx.translate(shark.x, shark.y);
@@ -4995,149 +4995,242 @@
 
         const s = shark.size;
         const biting = shark.biteTimer > 0;
+        const mouthOpen = biting ? 0.35 : 0.08; // jaw always slightly open
 
-        // Body - sleek torpedo shape
+        // --- BODY: massive, muscular, flat snout ---
         ctx.beginPath();
-        ctx.moveTo(s * 1.1, 0);
-        ctx.quadraticCurveTo(s * 0.6, -s * 0.35, -s * 0.2, -s * 0.3);
-        ctx.lineTo(-s * 0.8, -s * 0.1);
-        ctx.lineTo(-s * 0.8, s * 0.1);
-        ctx.lineTo(-s * 0.2, s * 0.35);
-        ctx.quadraticCurveTo(s * 0.6, s * 0.4, s * 1.1, 0);
+        // Top profile: flat head then curves up to dorsal area
+        ctx.moveTo(s * 1.2, -s * 0.05);
+        ctx.lineTo(s * 0.85, -s * 0.18);
+        ctx.quadraticCurveTo(s * 0.5, -s * 0.38, s * 0.1, -s * 0.4);
+        ctx.quadraticCurveTo(-s * 0.3, -s * 0.38, -s * 0.7, -s * 0.2);
+        ctx.lineTo(-s * 0.85, -s * 0.08);
+        // Bottom profile: wide belly
+        ctx.lineTo(-s * 0.85, s * 0.1);
+        ctx.quadraticCurveTo(-s * 0.3, s * 0.42, s * 0.1, s * 0.45);
+        ctx.quadraticCurveTo(s * 0.5, s * 0.42, s * 0.85, s * 0.22);
+        ctx.lineTo(s * 1.2, s * 0.08);
+        ctx.closePath();
+
+        // Gradient from dark top to lighter underside
+        const bodyGrad = ctx.createLinearGradient(0, -s * 0.4, 0, s * 0.45);
+        bodyGrad.addColorStop(0, shark.color);
+        bodyGrad.addColorStop(0.55, shark.color);
+        bodyGrad.addColorStop(0.6, '#8a9aaa');
+        bodyGrad.addColorStop(1, '#c8d4dd');
+        ctx.fillStyle = bodyGrad;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Scars / battle marks
+        ctx.strokeStyle = 'rgba(180,190,200,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(s * 0.2, -s * 0.15);
+        ctx.lineTo(s * 0.35, -s * 0.08);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.1, -s * 0.2);
+        ctx.lineTo(s * 0.05, -s * 0.12);
+        ctx.stroke();
+
+        // --- DORSAL FIN: huge, jagged, iconic ---
+        ctx.beginPath();
+        ctx.moveTo(s * 0.15, -s * 0.38);
+        ctx.lineTo(s * 0.08, -s * 1.0);
+        ctx.quadraticCurveTo(s * 0.0, -s * 0.95, -s * 0.08, -s * 0.85);
+        ctx.lineTo(-s * 0.2, -s * 0.36);
         ctx.closePath();
         ctx.fillStyle = shark.color;
         ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.4)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
-
-        // White belly
+        // Fin notch (battle damage)
         ctx.beginPath();
-        ctx.moveTo(s * 0.9, s * 0.02);
-        ctx.quadraticCurveTo(s * 0.4, s * 0.25, -s * 0.3, s * 0.2);
-        ctx.lineTo(-s * 0.3, s * 0.05);
-        ctx.quadraticCurveTo(s * 0.4, s * 0.08, s * 0.9, s * 0.02);
-        ctx.fillStyle = 'rgba(220,230,240,0.6)';
+        ctx.moveTo(-s * 0.02, -s * 0.75);
+        ctx.lineTo(s * 0.02, -s * 0.68);
+        ctx.lineTo(-s * 0.06, -s * 0.7);
+        ctx.fillStyle = isDay ? 'rgba(100,170,220,0.5)' : 'rgba(20,50,80,0.5)';
         ctx.fill();
 
-        // Dorsal fin (tall, iconic)
+        // --- TAIL: powerful crescent ---
         ctx.beginPath();
-        ctx.moveTo(s * 0.1, -s * 0.3);
-        ctx.lineTo(s * 0.05, -s * 0.75);
-        ctx.quadraticCurveTo(-s * 0.05, -s * 0.7, -s * 0.15, -s * 0.28);
-        ctx.closePath();
+        ctx.moveTo(-s * 0.8, 0);
+        ctx.quadraticCurveTo(-s * 1.1, -s * 0.2, -s * 1.5, -s * 0.6);
+        ctx.quadraticCurveTo(-s * 1.15, -s * 0.12, -s * 0.95, 0);
+        ctx.quadraticCurveTo(-s * 1.15, s * 0.18, -s * 1.4, s * 0.55);
+        ctx.quadraticCurveTo(-s * 1.05, s * 0.15, -s * 0.8, 0);
         ctx.fillStyle = shark.color;
         ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Tail fin (crescent)
+        // --- PECTORAL FINS: big, swept back ---
         ctx.beginPath();
-        ctx.moveTo(-s * 0.75, 0);
-        ctx.quadraticCurveTo(-s * 1.0, -s * 0.15, -s * 1.3, -s * 0.5);
-        ctx.quadraticCurveTo(-s * 1.0, -s * 0.1, -s * 0.85, 0);
-        ctx.quadraticCurveTo(-s * 1.0, s * 0.15, -s * 1.2, s * 0.45);
-        ctx.quadraticCurveTo(-s * 0.95, s * 0.12, -s * 0.75, 0);
-        ctx.fillStyle = shark.color;
-        ctx.fill();
-
-        // Pectoral fins
-        ctx.beginPath();
-        ctx.moveTo(s * 0.3, s * 0.2);
-        ctx.lineTo(s * 0.1, s * 0.55);
-        ctx.lineTo(-s * 0.1, s * 0.2);
+        ctx.moveTo(s * 0.35, s * 0.25);
+        ctx.quadraticCurveTo(s * 0.2, s * 0.65, -s * 0.05, s * 0.7);
+        ctx.quadraticCurveTo(s * 0.0, s * 0.45, -s * 0.1, s * 0.28);
         ctx.closePath();
         ctx.fillStyle = shark.color;
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.85;
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // Gills
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 1;
-        for (let g = 0; g < 3; g++) {
+        // Second pectoral (other side, slightly visible)
+        ctx.beginPath();
+        ctx.moveTo(s * 0.35, -s * 0.22);
+        ctx.quadraticCurveTo(s * 0.15, -s * 0.5, -s * 0.05, -s * 0.48);
+        ctx.quadraticCurveTo(s * 0.0, -s * 0.35, -s * 0.1, -s * 0.25);
+        ctx.closePath();
+        ctx.fillStyle = shark.color;
+        ctx.globalAlpha = 0.4;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // --- GILLS: deep slashes ---
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 1.5;
+        for (let g = 0; g < 4; g++) {
           ctx.beginPath();
-          const gx = s * (0.45 + g * 0.08);
-          ctx.moveTo(gx, -s * 0.12);
-          ctx.lineTo(gx, s * 0.08);
+          const gx = s * (0.42 + g * 0.07);
+          ctx.moveTo(gx, -s * 0.18);
+          ctx.lineTo(gx + s * 0.02, s * 0.12);
           ctx.stroke();
         }
 
-        // Eye - small and menacing
+        // --- SNOUT: flat, blunt, menacing ---
         ctx.beginPath();
-        ctx.arc(s * 0.7, -s * 0.1, s * 0.08, 0, Math.PI * 2);
-        ctx.fillStyle = '#111';
+        ctx.moveTo(s * 1.2, -s * 0.05);
+        ctx.quadraticCurveTo(s * 1.3, 0, s * 1.2, s * 0.08);
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Nostrils
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath();
+        ctx.ellipse(s * 1.05, -s * 0.08, s * 0.03, s * 0.015, -0.3, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(s * 0.71, -s * 0.11, s * 0.03, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.ellipse(s * 1.05, s * 0.1, s * 0.03, s * 0.015, 0.3, 0, Math.PI * 2);
         ctx.fill();
 
-        // Mouth
-        if (biting) {
+        // --- EYE: small, black, dead-looking ---
+        ctx.beginPath();
+        ctx.ellipse(s * 0.72, -s * 0.14, s * 0.07, s * 0.05, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        // Tiny menacing glint
+        ctx.beginPath();
+        ctx.arc(s * 0.74, -s * 0.16, s * 0.02, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fill();
+
+        // --- MOUTH: always open, teeth visible, TERRIFYING ---
+        // Upper jaw
+        ctx.beginPath();
+        ctx.moveTo(s * 1.2, -s * 0.05);
+        ctx.lineTo(s * 0.7, -s * 0.02);
+        ctx.lineTo(s * 0.7, -s * 0.05 - s * mouthOpen * 0.2);
+        ctx.quadraticCurveTo(s * 0.95, -s * 0.05 - s * mouthOpen * 0.15, s * 1.2, -s * 0.05);
+        ctx.fillStyle = '#660022';
+        ctx.fill();
+
+        // Lower jaw (drops down when biting)
+        ctx.beginPath();
+        ctx.moveTo(s * 1.2, s * 0.08);
+        ctx.lineTo(s * 0.7, s * 0.06);
+        ctx.lineTo(s * 0.7, s * 0.08 + s * mouthOpen);
+        ctx.quadraticCurveTo(s * 0.95, s * 0.1 + s * mouthOpen * 0.8, s * 1.2, s * 0.08);
+        ctx.fillStyle = '#880033';
+        ctx.fill();
+
+        // Gum line
+        ctx.beginPath();
+        ctx.moveTo(s * 1.18, s * 0.08);
+        ctx.quadraticCurveTo(s * 0.95, s * 0.09 + s * mouthOpen * 0.6, s * 0.72, s * 0.07 + s * mouthOpen * 0.7);
+        ctx.strokeStyle = '#cc3355';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // TEETH - always visible, triangular, serrated
+        ctx.fillStyle = '#f0f0ee';
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 0.5;
+        const teethCount = 7;
+        for (let tt = 0; tt < teethCount; tt++) {
+          const tp = tt / (teethCount - 1);
+          const tx = s * (0.75 + tp * 0.42);
+          const jawCurveTop = -s * 0.04 - s * mouthOpen * 0.15 * (1 - tp * 0.5);
+          const jawCurveBot = s * 0.07 + s * mouthOpen * (0.6 + tp * 0.3);
+          const toothH = s * (0.04 + mouthOpen * 0.3) * (1 - tp * 0.3);
+
+          // Upper teeth (pointing down)
           ctx.beginPath();
-          ctx.moveTo(s * 0.9, -s * 0.08);
-          ctx.lineTo(s * 1.15, 0);
-          ctx.lineTo(s * 0.9, s * 0.1);
-          ctx.closePath();
-          ctx.fillStyle = '#880000';
+          ctx.moveTo(tx - s * 0.02, jawCurveTop);
+          ctx.lineTo(tx, jawCurveTop + toothH);
+          ctx.lineTo(tx + s * 0.02, jawCurveTop);
           ctx.fill();
-          // Teeth - triangular
-          ctx.fillStyle = '#fff';
-          for (let tt = 0; tt < 5; tt++) {
-            const tx = s * (0.9 + tt * 0.05);
+          ctx.stroke();
+
+          // Lower teeth (pointing up)
+          ctx.beginPath();
+          ctx.moveTo(tx - s * 0.018, jawCurveBot);
+          ctx.lineTo(tx, jawCurveBot - toothH * 0.8);
+          ctx.lineTo(tx + s * 0.018, jawCurveBot);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Blood drip when biting
+        if (biting) {
+          ctx.fillStyle = 'rgba(180, 0, 20, 0.6)';
+          for (let b = 0; b < 3; b++) {
+            const bx = s * (0.85 + Math.random() * 0.3);
+            const by = s * (0.15 + mouthOpen * 0.5 + Math.random() * 0.1);
             ctx.beginPath();
-            ctx.moveTo(tx, -s * 0.06);
-            ctx.lineTo(tx + 2, -s * 0.02);
-            ctx.lineTo(tx - 1, -s * 0.02);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(tx, s * 0.08);
-            ctx.lineTo(tx + 2, s * 0.04);
-            ctx.lineTo(tx - 1, s * 0.04);
+            ctx.ellipse(bx, by, 1.5, 2.5, 0, 0, Math.PI * 2);
             ctx.fill();
           }
-        } else {
-          // Closed mouth line
-          ctx.beginPath();
-          ctx.moveTo(s * 0.85, s * 0.02);
-          ctx.lineTo(s * 1.1, 0);
-          ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
         }
 
-        // Wake/bubbles behind shark
+        // --- WAKE: turbulent water behind ---
         ctx.restore();
         ctx.save();
-        if (Math.random() < 0.4) {
-          ctx.globalAlpha = 0.35;
-          for (let b = 0; b < 3; b++) {
+        if (Math.random() < 0.5) {
+          ctx.globalAlpha = 0.4;
+          for (let b = 0; b < 5; b++) {
             ctx.beginPath();
-            const bx = shark.x - Math.cos(shark.angle) * (s * 1.5 + b * 8) + (Math.random() - 0.5) * 12;
-            const by = shark.y - Math.sin(shark.angle) * (s * 1.5 + b * 8) + (Math.random() - 0.5) * 12;
-            ctx.arc(bx, by, Math.max(1, 1.5 + Math.random() * 3), 0, Math.PI * 2);
+            const bx = shark.x - Math.cos(shark.angle) * (s * 1.8 + b * 10) + (Math.random() - 0.5) * 16;
+            const by = shark.y - Math.sin(shark.angle) * (s * 1.8 + b * 10) + (Math.random() - 0.5) * 16;
+            ctx.arc(bx, by, Math.max(1, 2 + Math.random() * 4), 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(200, 230, 255, 0.5)';
             ctx.fill();
           }
         }
 
-        // Dorsal fin above water effect (fin tip visible)
-        if (!biting) {
-          ctx.globalAlpha = 0.6 * sharkWaterLevel;
-          const finTipX = shark.x + Math.cos(shark.angle - 0.1) * s * 0.05;
-          const finTipY = shark.y + Math.sin(shark.angle - 0.1) * s * 0.05 - s * 0.3;
-          // V-wake from fin
-          ctx.beginPath();
-          ctx.moveTo(finTipX, finTipY);
-          ctx.lineTo(finTipX - Math.cos(shark.angle) * 20 - 8, finTipY + 5);
-          ctx.moveTo(finTipX, finTipY);
-          ctx.lineTo(finTipX - Math.cos(shark.angle) * 20 + 8, finTipY + 5);
-          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
+        // Dorsal fin cutting through water + V-wake
+        ctx.globalAlpha = 0.7 * sharkWaterLevel;
+        const finTipX = shark.x + Math.cos(shark.angle - 0.05) * s * 0.08;
+        const finTipY = shark.y - s * 0.5;
+        // V-wake from dorsal fin
+        ctx.beginPath();
+        ctx.moveTo(finTipX, finTipY);
+        ctx.lineTo(finTipX - Math.cos(shark.angle) * 30 - 12, finTipY + 8);
+        ctx.moveTo(finTipX, finTipY);
+        ctx.lineTo(finTipX - Math.cos(shark.angle) * 30 + 12, finTipY + 8);
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Splash at fin tip
+        ctx.beginPath();
+        ctx.arc(finTipX, finTipY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fill();
 
         ctx.restore();
       }
