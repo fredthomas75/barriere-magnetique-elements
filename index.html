@@ -4662,7 +4662,7 @@
 
             // Bite!
             if (d < 30) {
-              shark.biteTimer = 25;
+              shark.biteTimer = 50;
               shark.target.eaten = true;
               m.state = 'hit';
               m.hitTime = performance.now();
@@ -4995,7 +4995,30 @@
 
         const s = shark.size;
         const biting = shark.biteTimer > 0;
-        const mouthOpen = biting ? 0.35 : 0.08; // jaw always slightly open
+        // Animated jaw: open wide (50-40), SNAP shut (40-35), chew (35-0)
+        let mouthOpen = 0.08;
+        let headLunge = 0;
+        if (biting) {
+          const bt = shark.biteTimer;
+          if (bt > 40) {
+            // Phase 1: jaw opens WIDE (50→40)
+            const p = (50 - bt) / 10;
+            mouthOpen = 0.08 + p * 0.55;
+            headLunge = p * 6;
+          } else if (bt > 35) {
+            // Phase 2: SNAP shut (40→35)
+            const p = (40 - bt) / 5;
+            mouthOpen = 0.63 - p * 0.5;
+            headLunge = 6 - p * 4;
+          } else {
+            // Phase 3: chewing / grinding (35→0)
+            mouthOpen = 0.13 + Math.sin(bt * 0.6) * 0.12;
+            headLunge = 2 * (bt / 35);
+          }
+        }
+
+        // Head lunge forward when biting
+        if (headLunge > 0) ctx.translate(headLunge, 0);
 
         // --- BODY: massive, muscular, flat snout ---
         ctx.beginPath();
@@ -5186,15 +5209,34 @@
           ctx.stroke();
         }
 
-        // Blood drip when biting
+        // Blood and gore when biting
         if (biting) {
-          ctx.fillStyle = 'rgba(180, 0, 20, 0.6)';
-          for (let b = 0; b < 3; b++) {
-            const bx = s * (0.85 + Math.random() * 0.3);
-            const by = s * (0.15 + mouthOpen * 0.5 + Math.random() * 0.1);
-            ctx.beginPath();
-            ctx.ellipse(bx, by, 1.5, 2.5, 0, 0, Math.PI * 2);
-            ctx.fill();
+          const bt = shark.biteTimer;
+          // Blood splatter during snap phase
+          if (bt <= 40) {
+            const intensity = bt > 35 ? 0.8 : 0.4;
+            ctx.fillStyle = `rgba(160, 0, 15, ${intensity})`;
+            const drops = bt > 35 ? 8 : 4;
+            for (let b = 0; b < drops; b++) {
+              const bx = s * (0.8 + Math.random() * 0.4);
+              const by = s * (mouthOpen * 0.3 + (Math.random() - 0.3) * 0.3);
+              const br = 1.5 + Math.random() * 2.5;
+              ctx.beginPath();
+              ctx.ellipse(bx, by, br, br * 1.5, Math.random(), 0, Math.PI * 2);
+              ctx.fill();
+            }
+            // Dripping blood from jaw
+            if (bt <= 35) {
+              ctx.strokeStyle = `rgba(140, 0, 10, ${0.3 + Math.sin(bt * 0.3) * 0.15})`;
+              ctx.lineWidth = 1.5;
+              for (let d = 0; d < 2; d++) {
+                const dx = s * (0.85 + d * 0.15);
+                ctx.beginPath();
+                ctx.moveTo(dx, s * (0.08 + mouthOpen));
+                ctx.lineTo(dx + (Math.random() - 0.5) * 3, s * (0.08 + mouthOpen) + 4 + Math.random() * 6);
+                ctx.stroke();
+              }
+            }
           }
         }
 
