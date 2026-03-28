@@ -4656,9 +4656,19 @@
             const dx = m.x - shark.x;
             const dy = m.y - shark.y;
             const d = Math.sqrt(dx * dx + dy * dy);
-            shark.angle = Math.atan2(dy, dx);
-            shark.x += Math.cos(shark.angle) * shark.speed * 1.8;
-            shark.y += Math.sin(shark.angle) * shark.speed * 1.8;
+            // Smooth turn towards target
+            let targetAngle = Math.atan2(dy, dx);
+            let angleDiff = targetAngle - shark.angle;
+            // Normalize angle difference to [-PI, PI]
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            // Turn faster when close, slower when far (like a real predator circling)
+            const turnRate = d < 80 ? 0.12 : 0.06;
+            shark.angle += angleDiff * turnRate;
+            // Accelerate on approach
+            const huntSpeed = d < 60 ? shark.speed * 2.2 : shark.speed * 1.5;
+            shark.x += Math.cos(shark.angle) * huntSpeed;
+            shark.y += Math.sin(shark.angle) * huntSpeed;
 
             // Bite!
             if (d < 30) {
@@ -4709,14 +4719,31 @@
               shark.target = null;
             }
           } else {
-            shark.x += Math.cos(shark.angle) * shark.speed;
-            shark.y += Math.sin(shark.wobble) * 1.2;
+            // Smooth patrol swimming — orbit around the barrier
             const fx = shark.x - centerX;
             const fy = (shark.y - (centerY + 20)) / 0.55;
             const fDist = Math.sqrt(fx * fx + fy * fy);
-            if (fDist < barrierRadius + 15 || fDist > barrierRadius + 160) {
-              shark.angle += 0.08;
-            }
+            const orbitAngle = Math.atan2(fy, fx);
+
+            // Gently steer to stay in patrol zone (barrier+30 to barrier+140)
+            const idealDist = barrierRadius + 85;
+            const distError = fDist - idealDist;
+            // Tangent direction (swim along orbit) + slight inward/outward correction
+            const tangent = orbitAngle + Math.PI * 0.5; // perpendicular = orbit direction
+            let desiredAngle = tangent + distError * 0.008;
+            // Add gentle weaving for natural look
+            desiredAngle += Math.sin(shark.wobble) * 0.15;
+
+            // Smooth turn towards desired angle
+            let angleDiff = desiredAngle - shark.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            shark.angle += angleDiff * 0.04;
+
+            // Slight speed variation (like real swimming)
+            const swimSpeed = shark.speed * (0.9 + Math.sin(shark.wobble * 0.7) * 0.15);
+            shark.x += Math.cos(shark.angle) * swimSpeed;
+            shark.y += Math.sin(shark.angle) * swimSpeed * 0.55; // flatten for elliptical orbit
           }
 
           if (shark.biteTimer > 0) shark.biteTimer--;
