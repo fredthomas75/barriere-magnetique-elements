@@ -305,6 +305,37 @@
       50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,180,255,0.7), 0 0 80px rgba(0,220,255,0.4); }
     }
 
+    .btn-sharkwave {
+      background: linear-gradient(135deg, #003355, #005577, #0088aa, #006688, #002244, #007799);
+      background-size: 500% 500%;
+      color: #aaeeff;
+      font-size: clamp(10px, 1.8vw, 13px);
+      font-weight: 800;
+      text-shadow: 0 1px 3px rgba(0,50,100,0.6);
+      box-shadow: 0 0 25px rgba(0,80,160,0.5), 0 0 50px rgba(0,120,200,0.3), 0 4px 15px rgba(0,0,0,0.5);
+      animation: sharkShine 3s ease infinite;
+      display: none;
+      border: 2px solid rgba(0,150,200,0.5);
+    }
+    .btn-sharkwave:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px rgba(0,100,180,0.7), 0 0 70px rgba(0,160,220,0.5);
+    }
+    .btn-sharkwave:active { transform: scale(0.95); }
+    .btn-sharkwave.sharkwave-active {
+      animation: sharkShine 0.4s ease infinite, sharkPulse 0.5s ease infinite;
+      border-color: #00ccff;
+    }
+    @keyframes sharkShine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes sharkPulse {
+      0%, 100% { transform: scale(1.02); }
+      50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,100,200,0.8), 0 0 80px rgba(0,180,255,0.5); }
+    }
+
     .btn-metalwave {
       background: linear-gradient(135deg, #888899, #c0c0c0, #ffaa00, #00ccff, #888899);
       background-size: 400% 400%;
@@ -590,6 +621,9 @@
     </button>
     <button class="btn btn-fishwave" id="btnFishWave" onclick="triggerFishWave()">
       🐟 VAGUE DU POISSON 🐟
+    </button>
+    <button class="btn btn-sharkwave" id="btnSharkWave" onclick="triggerSharkWave()">
+      🦈 REQUINS 🦈
     </button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
@@ -3152,6 +3186,7 @@
       document.getElementById('btnCobra').style.display = 'block';
       document.getElementById('btnLightning').style.display = 'block';
       document.getElementById('btnFishWave').style.display = 'block';
+      document.getElementById('btnSharkWave').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
 
@@ -3181,6 +3216,8 @@
       document.getElementById('btnLightning').classList.remove('lightning-active');
       document.getElementById('btnFishWave').style.display = 'none';
       document.getElementById('btnFishWave').classList.remove('fishwave-active');
+      document.getElementById('btnSharkWave').style.display = 'none';
+      document.getElementById('btnSharkWave').classList.remove('sharkwave-active');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
       document.getElementById('btnUltraBoost').style.display = 'none';
@@ -3191,6 +3228,8 @@
       lightningBolts = [];
       fishWaveActive = false;
       fishWaveFish = [];
+      sharkWaveActive = false;
+      sharkWaveSharks = [];
       waterLevel = 0;
       floatingMonsters = [];
 
@@ -4467,6 +4506,645 @@
       ctx.restore();
     }
 
+    // ===== VAGUE DE REQUINS =====
+    let sharkWaveActive = false;
+    let sharkWaveTimer = 0;
+    const SHARKWAVE_DURATION = 600; // ~10 seconds
+    let sharkWaterLevel = 0;
+    let sharkWaveSharks = [];
+    let sharkFloatingMonsters = [];
+    let sharkSurfWaves = []; // big surf waves
+
+    function triggerSharkWave() {
+      if (sharkWaveActive) return;
+      sharkWaveActive = true;
+      sharkWaveTimer = 0;
+      sharkWaterLevel = 0;
+      sharkWaveSharks = [];
+      sharkFloatingMonsters = [];
+      sharkSurfWaves = [];
+      document.getElementById('btnSharkWave').classList.add('sharkwave-active');
+
+      // Spawn sharks (fewer but bigger than fish)
+      for (let i = 0; i < 4; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = barrierRadius + 50 + Math.random() * 100;
+        sharkWaveSharks.push({
+          x: centerX + Math.cos(angle) * dist,
+          y: (centerY + 20) + Math.sin(angle) * dist * 0.55,
+          angle: angle,
+          speed: 2.5 + Math.random() * 1.5,
+          size: 22 + Math.random() * 10,
+          color: ['#4a6a7a', '#3a5a6a', '#5a7a8a', '#2a4a5a'][i],
+          wobble: Math.random() * Math.PI * 2,
+          hunting: false,
+          target: null,
+          biteTimer: 0,
+          finPhase: Math.random() * Math.PI * 2
+        });
+      }
+
+      // Spawn surf waves that travel across the screen
+      for (let i = 0; i < 5; i++) {
+        sharkSurfWaves.push({
+          x: -200 - i * 300,
+          speed: 2 + Math.random() * 1.5,
+          height: 30 + Math.random() * 25,
+          width: 120 + Math.random() * 80,
+          phase: Math.random() * Math.PI * 2,
+          foam: Math.random() * 0.3 + 0.5
+        });
+      }
+
+      // Big ocean wave sound
+      try {
+        initAudio();
+        if (audioCtx) {
+          const bufSize = audioCtx.sampleRate * 4;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t = i / audioCtx.sampleRate;
+            const env = Math.min(1, t * 1.5) * Math.exp(-t * 0.3);
+            d[i] = (Math.random() * 2 - 1) * env * 0.2;
+            d[i] += Math.sin(t * 15 + Math.sin(t * 3) * 6) * env * 0.12;
+            d[i] += Math.sin(t * 8 + Math.sin(t * 2) * 8) * env * 0.08;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const lp = audioCtx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 300;
+          const g = audioCtx.createGain();
+          g.gain.value = 0.4;
+          src.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+          src.start();
+        }
+      } catch(e) {}
+    }
+
+    function updateSharkWave(t) {
+      if (!sharkWaveActive) return;
+      sharkWaveTimer++;
+
+      // Phase 1 (0-100): water rises with big waves
+      if (sharkWaveTimer < 100) {
+        sharkWaterLevel = Math.min(1, sharkWaveTimer / 90);
+        if (sharkWaterLevel > 0.3) {
+          for (const m of monsters) {
+            if (m.state !== 'approaching' && m.state !== 'idle') continue;
+            if (sharkFloatingMonsters.some(f => f.monster === m)) continue;
+            const bx = m.x - centerX;
+            const by = (m.y - (centerY + 20)) / 0.55;
+            const bDist = Math.sqrt(bx * bx + by * by);
+            if (bDist > barrierRadius - 10) {
+              m.state = 'floating';
+              sharkFloatingMonsters.push({
+                monster: m,
+                bobPhase: Math.random() * Math.PI * 2,
+                bobAmp: 4 + Math.random() * 5,
+                baseY: m.y,
+                timer: 0,
+                eaten: false
+              });
+            }
+          }
+        }
+      }
+
+      // Update surf waves
+      for (const sw of sharkSurfWaves) {
+        sw.x += sw.speed;
+        if (sw.x > W + 200) {
+          sw.x = -200 - Math.random() * 200;
+          sw.height = 30 + Math.random() * 25;
+          sw.speed = 2 + Math.random() * 1.5;
+        }
+      }
+
+      // Phase 2 (80-480): sharks hunt floating monsters
+      if (sharkWaveTimer >= 80 && sharkWaveTimer < 480) {
+        for (const shark of sharkWaveSharks) {
+          shark.wobble += 0.06;
+          shark.finPhase += 0.04;
+
+          if (!shark.hunting || !shark.target || shark.target.eaten) {
+            shark.hunting = false;
+            shark.target = null;
+            let closest = null;
+            let closestDist = Infinity;
+            for (const fm of sharkFloatingMonsters) {
+              if (fm.eaten) continue;
+              if (!monsters.includes(fm.monster)) continue;
+              const dx = fm.monster.x - shark.x;
+              const dy = fm.monster.y - shark.y;
+              const d = Math.sqrt(dx * dx + dy * dy);
+              const taken = sharkWaveSharks.some(f => f !== shark && f.target === fm);
+              if (d < closestDist && !taken) {
+                closestDist = d;
+                closest = fm;
+              }
+            }
+            if (closest) {
+              shark.hunting = true;
+              shark.target = closest;
+            }
+          }
+
+          if (shark.hunting && shark.target && monsters.includes(shark.target.monster)) {
+            const m = shark.target.monster;
+            const dx = m.x - shark.x;
+            const dy = m.y - shark.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            shark.angle = Math.atan2(dy, dx);
+            shark.x += Math.cos(shark.angle) * shark.speed * 1.8;
+            shark.y += Math.sin(shark.angle) * shark.speed * 1.8;
+
+            // Bite!
+            if (d < 30) {
+              shark.biteTimer = 25;
+              shark.target.eaten = true;
+              m.state = 'hit';
+              m.hitTime = performance.now();
+              m.flyVx = (Math.random() - 0.5) * 5;
+              m.flyVy = 4 + Math.random() * 3;
+              m.flyRotSpeed = (Math.random() - 0.5) * 0.4;
+              monstersDefeated++;
+              document.getElementById('monsterCount').textContent = monstersDefeated;
+              shakeAmount = 8;
+
+              // Big water splash
+              for (let p = 0; p < 30; p++) {
+                impactParticles.push(new ImpactParticle(
+                  m.x + (Math.random() - 0.5) * 30,
+                  m.y + (Math.random() - 0.5) * 30,
+                  `rgba(${30 + Math.random() * 80}, ${120 + Math.random() * 135}, 255, 1)`
+                ));
+              }
+
+              // Crunch sound
+              try {
+                if (audioCtx) {
+                  const bufSize = audioCtx.sampleRate * 0.4;
+                  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+                  const dd = buf.getChannelData(0);
+                  for (let i = 0; i < bufSize; i++) {
+                    const tt = i / audioCtx.sampleRate;
+                    dd[i] = (Math.random() * 2 - 1) * Math.exp(-tt * 6) * 0.3;
+                    dd[i] += Math.sin(tt * 80) * Math.exp(-tt * 8) * 0.15;
+                  }
+                  const src = audioCtx.createBufferSource();
+                  src.buffer = buf;
+                  const lp = audioCtx.createBiquadFilter();
+                  lp.type = 'lowpass';
+                  lp.frequency.value = 500;
+                  const g = audioCtx.createGain();
+                  g.gain.value = 0.25;
+                  src.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+                  src.start();
+                }
+              } catch(e) {}
+
+              shark.hunting = false;
+              shark.target = null;
+            }
+          } else {
+            shark.x += Math.cos(shark.angle) * shark.speed;
+            shark.y += Math.sin(shark.wobble) * 1.2;
+            const fx = shark.x - centerX;
+            const fy = (shark.y - (centerY + 20)) / 0.55;
+            const fDist = Math.sqrt(fx * fx + fy * fy);
+            if (fDist < barrierRadius + 15 || fDist > barrierRadius + 160) {
+              shark.angle += 0.08;
+            }
+          }
+
+          if (shark.biteTimer > 0) shark.biteTimer--;
+        }
+      }
+
+      // Update floating monsters (bigger bob for rough seas)
+      for (let i = sharkFloatingMonsters.length - 1; i >= 0; i--) {
+        const fm = sharkFloatingMonsters[i];
+        if (!monsters.includes(fm.monster)) {
+          sharkFloatingMonsters.splice(i, 1);
+          continue;
+        }
+        fm.timer++;
+        if (!fm.eaten) {
+          fm.monster.x += Math.sin(fm.timer * 0.04) * 1.0;
+          fm.monster.y = fm.baseY + Math.sin(fm.bobPhase + fm.timer * 0.07) * fm.bobAmp;
+        }
+      }
+
+      // Phase 3 (460+): water recedes
+      if (sharkWaveTimer >= 460) {
+        sharkWaterLevel = Math.max(0, 1 - (sharkWaveTimer - 460) / 120);
+      }
+
+      // End
+      if (sharkWaveTimer >= SHARKWAVE_DURATION) {
+        sharkWaveActive = false;
+        sharkWaveSharks = [];
+        sharkWaterLevel = 0;
+        sharkSurfWaves = [];
+        for (const fm of sharkFloatingMonsters) {
+          if (monsters.includes(fm.monster) && fm.monster.state === 'floating') {
+            fm.monster.state = 'approaching';
+          }
+        }
+        sharkFloatingMonsters = [];
+        document.getElementById('btnSharkWave').classList.remove('sharkwave-active');
+      }
+    }
+
+    // Offscreen canvas for shark wave
+    let _sharkOsc = null;
+
+    function drawSharkWave(t) {
+      if (!sharkWaveActive && sharkWaterLevel <= 0) return;
+
+      ctx.save();
+
+      if (sharkWaterLevel > 0) {
+        const bCx = centerX;
+        const bCy = centerY + 20;
+        const bRx = barrierRadius;
+        const bRy = barrierRadius * 0.55;
+        const wl = sharkWaterLevel;
+        const isDay = daylight > 0.5;
+
+        // Create/resize offscreen canvas
+        if (!_sharkOsc || _sharkOsc.width !== W || _sharkOsc.height !== H) {
+          _sharkOsc = document.createElement('canvas');
+          _sharkOsc.width = W;
+          _sharkOsc.height = H;
+        }
+        const ox = _sharkOsc.getContext('2d');
+        ox.clearRect(0, 0, W, H);
+
+        // Deep dark ocean water
+        ox.fillStyle = isDay ? 'rgba(5, 40, 90, 0.7)' : 'rgba(2, 12, 35, 0.75)';
+        ox.fillRect(0, 0, W, H);
+
+        // Turbulent wave lines (bigger, more dramatic)
+        const waveSpeed = t * 0.002;
+        for (let wy = 5; wy < H; wy += 10) {
+          ox.beginPath();
+          for (let x = 0; x <= W; x += 4) {
+            const yOff = Math.sin(x * 0.015 + waveSpeed + wy * 0.01) * 8 +
+              Math.sin(x * 0.008 + waveSpeed * 1.5 + wy * 0.005) * 6 +
+              Math.sin(x * 0.025 + waveSpeed * 0.7 + wy * 0.015) * 4;
+            if (x === 0) ox.moveTo(x, wy + yOff);
+            else ox.lineTo(x, wy + yOff);
+          }
+          ox.strokeStyle = isDay
+            ? `rgba(60, 140, 200, ${0.35 + Math.sin(wy * 0.04 + waveSpeed) * 0.15})`
+            : `rgba(30, 70, 130, ${0.3 + Math.sin(wy * 0.04 + waveSpeed) * 0.12})`;
+          ox.lineWidth = 2.5;
+          ox.stroke();
+        }
+
+        // BIG SURF WAVES - the key visual difference
+        for (const sw of sharkSurfWaves) {
+          const waveX = sw.x;
+          const waveH = sw.height * wl;
+          const waveW = sw.width;
+
+          // Wave body
+          ox.save();
+          ox.beginPath();
+          ox.moveTo(waveX - waveW * 0.6, H);
+          // Back slope
+          ox.quadraticCurveTo(
+            waveX - waveW * 0.3, H - waveH * 0.3,
+            waveX, H - waveH
+          );
+          // Curl top
+          ox.quadraticCurveTo(
+            waveX + waveW * 0.15, H - waveH * 1.15,
+            waveX + waveW * 0.3, H - waveH * 0.9
+          );
+          // Curl front (the breaking part)
+          ox.quadraticCurveTo(
+            waveX + waveW * 0.35, H - waveH * 0.5,
+            waveX + waveW * 0.5, H
+          );
+          ox.closePath();
+
+          const waveGrad = ox.createLinearGradient(waveX, H - waveH, waveX, H);
+          if (isDay) {
+            waveGrad.addColorStop(0, 'rgba(20, 100, 180, 0.9)');
+            waveGrad.addColorStop(0.3, 'rgba(10, 70, 140, 0.85)');
+            waveGrad.addColorStop(1, 'rgba(5, 40, 90, 0.6)');
+          } else {
+            waveGrad.addColorStop(0, 'rgba(10, 50, 100, 0.9)');
+            waveGrad.addColorStop(0.3, 'rgba(5, 30, 70, 0.85)');
+            waveGrad.addColorStop(1, 'rgba(2, 15, 40, 0.6)');
+          }
+          ox.fillStyle = waveGrad;
+          ox.fill();
+
+          // White foam crest
+          ox.beginPath();
+          ox.moveTo(waveX - waveW * 0.05, H - waveH * 0.95);
+          ox.quadraticCurveTo(
+            waveX + waveW * 0.15, H - waveH * 1.2,
+            waveX + waveW * 0.32, H - waveH * 0.85
+          );
+          // Foam drips
+          for (let f = 0; f < 5; f++) {
+            const fx = waveX + waveW * (0.2 + f * 0.03);
+            const fy = H - waveH * (0.85 - f * 0.08) + Math.sin(t * 0.008 + f * 2 + sw.phase) * 4;
+            ox.lineTo(fx, fy);
+            ox.lineTo(fx + waveW * 0.02, fy + 3);
+          }
+          ox.strokeStyle = isDay ? `rgba(255, 255, 255, ${sw.foam})` : `rgba(180, 210, 240, ${sw.foam * 0.7})`;
+          ox.lineWidth = 3;
+          ox.stroke();
+
+          // Spray dots at the crest
+          for (let s = 0; s < 8; s++) {
+            const sx = waveX + waveW * (0.1 + Math.random() * 0.25);
+            const sy = H - waveH * (0.9 + Math.random() * 0.3);
+            const sr = Math.max(1, 1 + Math.random() * 3);
+            ox.beginPath();
+            ox.arc(sx, sy, sr, 0, Math.PI * 2);
+            ox.fillStyle = isDay ? `rgba(255, 255, 255, ${0.3 + Math.random() * 0.4})` : `rgba(150, 190, 220, ${0.2 + Math.random() * 0.3})`;
+            ox.fill();
+          }
+          ox.restore();
+        }
+
+        // Additional horizontal surf waves traveling across
+        for (let w = 0; w < 3; w++) {
+          const wy = H * (0.3 + w * 0.25);
+          const wOff = (t * 0.003 + w * 2) % 1;
+          ox.beginPath();
+          for (let x = 0; x <= W; x += 3) {
+            const yOff = Math.sin(x * 0.02 + t * 0.003 + w * 3) * (12 + w * 5) +
+              Math.sin(x * 0.01 + t * 0.005 + w) * 8;
+            if (x === 0) ox.moveTo(x, wy + yOff);
+            else ox.lineTo(x, wy + yOff);
+          }
+          ox.strokeStyle = isDay
+            ? `rgba(150, 220, 255, ${0.25 + Math.sin(t * 0.002 + w) * 0.1})`
+            : `rgba(60, 120, 180, ${0.2 + Math.sin(t * 0.002 + w) * 0.08})`;
+          ox.lineWidth = 3;
+          ox.stroke();
+
+          // Foam line on top of wave
+          ox.beginPath();
+          for (let x = 0; x <= W; x += 3) {
+            const yOff = Math.sin(x * 0.02 + t * 0.003 + w * 3) * (12 + w * 5) +
+              Math.sin(x * 0.01 + t * 0.005 + w) * 8 - 2;
+            if (x === 0) ox.moveTo(x, wy + yOff);
+            else ox.lineTo(x, wy + yOff);
+          }
+          ox.strokeStyle = isDay
+            ? `rgba(255, 255, 255, ${0.15 + Math.sin(t * 0.003 + w * 1.5) * 0.08})`
+            : `rgba(140, 180, 220, ${0.1 + Math.sin(t * 0.003 + w * 1.5) * 0.06})`;
+          ox.lineWidth = 2;
+          ox.stroke();
+        }
+
+        // Erase barrier ellipse
+        ox.save();
+        ox.globalCompositeOperation = 'destination-out';
+        ox.beginPath();
+        ox.ellipse(bCx, bCy, bRx + 5, bRy + 5, 0, 0, Math.PI * 2);
+        ox.fill();
+        ox.restore();
+
+        // Composite onto main canvas
+        ctx.globalAlpha = wl;
+        ctx.drawImage(_sharkOsc, 0, 0);
+        ctx.globalAlpha = 1;
+
+        // Spray particles on water
+        ctx.save();
+        ctx.globalAlpha = wl;
+        for (let i = 0; i < 40; i++) {
+          const sx = (i * 97.3 + t * 0.03 + Math.sin(i * 3.1) * 60) % (W + 40) - 20;
+          const sy = (i * 53.7 + t * 0.012 + Math.cos(i * 2.3) * 40) % (H + 40) - 20;
+          const sdx = (sx - bCx) / (bRx + 10);
+          const sdy = (sy - bCy) / (bRy + 10);
+          if (sdx * sdx + sdy * sdy < 1) continue;
+          const sparkle = Math.max(1, 2.5 + Math.sin(t * 0.005 + i * 2.1) * 2);
+          if (sparkle > 1.5) {
+            ctx.beginPath();
+            ctx.arc(sx, sy, sparkle, 0, Math.PI * 2);
+            ctx.fillStyle = isDay ? `rgba(255, 255, 255, ${0.4 + Math.sin(t * 0.006 + i) * 0.25})` : `rgba(120, 170, 220, ${0.25 + Math.sin(t * 0.006 + i) * 0.15})`;
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        // Crashing waves against barrier
+        ctx.save();
+        ctx.globalAlpha = 0.9 * wl;
+        // Barrier glow (stronger, more turbulent)
+        ctx.strokeStyle = isDay ? 'rgba(180, 240, 255, 0.9)' : 'rgba(80, 150, 200, 0.8)';
+        ctx.lineWidth = 5;
+        ctx.shadowColor = isDay ? 'rgba(100, 200, 255, 0.9)' : 'rgba(40, 100, 180, 0.7)';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.ellipse(bCx, bCy, bRx + 6, bRy + 6, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Big foam splashes against barrier
+        for (let a = 0; a < Math.PI * 2; a += 0.06) {
+          const foamR = Math.max(1, 4 + Math.sin(a * 8 + t * 0.006) * 3 + Math.sin(a * 13 + t * 0.004) * 2);
+          const splash = Math.max(0, Math.sin(a * 3 + t * 0.003)) * 8;
+          const foamDist = bRx + 7 + foamR + splash + Math.sin(a * 5 + t * 0.005) * 4;
+          const fx = bCx + Math.cos(a) * foamDist;
+          const fy = bCy + Math.sin(a) * (foamDist * bRy / bRx);
+          ctx.beginPath();
+          ctx.arc(fx, fy, foamR, 0, Math.PI * 2);
+          const foamAlpha = 0.5 + Math.sin(a * 7 + t * 0.005) * 0.25;
+          ctx.fillStyle = isDay ? `rgba(240, 250, 255, ${foamAlpha})` : `rgba(100, 140, 180, ${foamAlpha * 0.7})`;
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Ripple rings around floating monsters (bigger, rougher)
+        for (const fm of sharkFloatingMonsters) {
+          if (!fm.eaten && monsters.includes(fm.monster)) {
+            const m = fm.monster;
+            ctx.save();
+            ctx.globalAlpha = 0.6 * wl;
+            ctx.strokeStyle = isDay ? 'rgba(200, 240, 255, 0.7)' : 'rgba(80, 120, 180, 0.6)';
+            ctx.lineWidth = 2;
+            for (let r = 0; r < 4; r++) {
+              const rippleR = 15 + r * 16 + Math.sin(fm.timer * 0.06 + r) * 6;
+              ctx.beginPath();
+              ctx.ellipse(m.x, m.y + m.size * 0.3, rippleR, rippleR * 0.4, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+      }
+
+      // Draw sharks
+      for (const shark of sharkWaveSharks) {
+        ctx.save();
+        ctx.translate(shark.x, shark.y);
+        ctx.rotate(shark.angle);
+
+        const s = shark.size;
+        const biting = shark.biteTimer > 0;
+
+        // Body - sleek torpedo shape
+        ctx.beginPath();
+        ctx.moveTo(s * 1.1, 0);
+        ctx.quadraticCurveTo(s * 0.6, -s * 0.35, -s * 0.2, -s * 0.3);
+        ctx.lineTo(-s * 0.8, -s * 0.1);
+        ctx.lineTo(-s * 0.8, s * 0.1);
+        ctx.lineTo(-s * 0.2, s * 0.35);
+        ctx.quadraticCurveTo(s * 0.6, s * 0.4, s * 1.1, 0);
+        ctx.closePath();
+        ctx.fillStyle = shark.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // White belly
+        ctx.beginPath();
+        ctx.moveTo(s * 0.9, s * 0.02);
+        ctx.quadraticCurveTo(s * 0.4, s * 0.25, -s * 0.3, s * 0.2);
+        ctx.lineTo(-s * 0.3, s * 0.05);
+        ctx.quadraticCurveTo(s * 0.4, s * 0.08, s * 0.9, s * 0.02);
+        ctx.fillStyle = 'rgba(220,230,240,0.6)';
+        ctx.fill();
+
+        // Dorsal fin (tall, iconic)
+        ctx.beginPath();
+        ctx.moveTo(s * 0.1, -s * 0.3);
+        ctx.lineTo(s * 0.05, -s * 0.75);
+        ctx.quadraticCurveTo(-s * 0.05, -s * 0.7, -s * 0.15, -s * 0.28);
+        ctx.closePath();
+        ctx.fillStyle = shark.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Tail fin (crescent)
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.75, 0);
+        ctx.quadraticCurveTo(-s * 1.0, -s * 0.15, -s * 1.3, -s * 0.5);
+        ctx.quadraticCurveTo(-s * 1.0, -s * 0.1, -s * 0.85, 0);
+        ctx.quadraticCurveTo(-s * 1.0, s * 0.15, -s * 1.2, s * 0.45);
+        ctx.quadraticCurveTo(-s * 0.95, s * 0.12, -s * 0.75, 0);
+        ctx.fillStyle = shark.color;
+        ctx.fill();
+
+        // Pectoral fins
+        ctx.beginPath();
+        ctx.moveTo(s * 0.3, s * 0.2);
+        ctx.lineTo(s * 0.1, s * 0.55);
+        ctx.lineTo(-s * 0.1, s * 0.2);
+        ctx.closePath();
+        ctx.fillStyle = shark.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Gills
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1;
+        for (let g = 0; g < 3; g++) {
+          ctx.beginPath();
+          const gx = s * (0.45 + g * 0.08);
+          ctx.moveTo(gx, -s * 0.12);
+          ctx.lineTo(gx, s * 0.08);
+          ctx.stroke();
+        }
+
+        // Eye - small and menacing
+        ctx.beginPath();
+        ctx.arc(s * 0.7, -s * 0.1, s * 0.08, 0, Math.PI * 2);
+        ctx.fillStyle = '#111';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(s * 0.71, -s * 0.11, s * 0.03, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fill();
+
+        // Mouth
+        if (biting) {
+          ctx.beginPath();
+          ctx.moveTo(s * 0.9, -s * 0.08);
+          ctx.lineTo(s * 1.15, 0);
+          ctx.lineTo(s * 0.9, s * 0.1);
+          ctx.closePath();
+          ctx.fillStyle = '#880000';
+          ctx.fill();
+          // Teeth - triangular
+          ctx.fillStyle = '#fff';
+          for (let tt = 0; tt < 5; tt++) {
+            const tx = s * (0.9 + tt * 0.05);
+            ctx.beginPath();
+            ctx.moveTo(tx, -s * 0.06);
+            ctx.lineTo(tx + 2, -s * 0.02);
+            ctx.lineTo(tx - 1, -s * 0.02);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(tx, s * 0.08);
+            ctx.lineTo(tx + 2, s * 0.04);
+            ctx.lineTo(tx - 1, s * 0.04);
+            ctx.fill();
+          }
+        } else {
+          // Closed mouth line
+          ctx.beginPath();
+          ctx.moveTo(s * 0.85, s * 0.02);
+          ctx.lineTo(s * 1.1, 0);
+          ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Wake/bubbles behind shark
+        ctx.restore();
+        ctx.save();
+        if (Math.random() < 0.4) {
+          ctx.globalAlpha = 0.35;
+          for (let b = 0; b < 3; b++) {
+            ctx.beginPath();
+            const bx = shark.x - Math.cos(shark.angle) * (s * 1.5 + b * 8) + (Math.random() - 0.5) * 12;
+            const by = shark.y - Math.sin(shark.angle) * (s * 1.5 + b * 8) + (Math.random() - 0.5) * 12;
+            ctx.arc(bx, by, Math.max(1, 1.5 + Math.random() * 3), 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(200, 230, 255, 0.5)';
+            ctx.fill();
+          }
+        }
+
+        // Dorsal fin above water effect (fin tip visible)
+        if (!biting) {
+          ctx.globalAlpha = 0.6 * sharkWaterLevel;
+          const finTipX = shark.x + Math.cos(shark.angle - 0.1) * s * 0.05;
+          const finTipY = shark.y + Math.sin(shark.angle - 0.1) * s * 0.05 - s * 0.3;
+          // V-wake from fin
+          ctx.beginPath();
+          ctx.moveTo(finTipX, finTipY);
+          ctx.lineTo(finTipX - Math.cos(shark.angle) * 20 - 8, finTipY + 5);
+          ctx.moveTo(finTipX, finTipY);
+          ctx.lineTo(finTipX - Math.cos(shark.angle) * 20 + 8, finTipY + 5);
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     // ===== ULTRA BOOST =====
     function triggerUltraBoost() {
       if (!barrierActive || ultraBoostActive) return;
@@ -4662,6 +5340,7 @@
     document.getElementById('btnUltraBoost').style.display = 'none';
     document.getElementById('btnLightning').style.display = 'none';
     document.getElementById('btnFishWave').style.display = 'none';
+    document.getElementById('btnSharkWave').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -5062,6 +5741,8 @@
 
       // Fish wave
       updateFishWave(t);
+      // Shark wave
+      updateSharkWave(t);
 
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
@@ -5125,6 +5806,8 @@
 
       // Fish wave flood (drawn over everything, clipped outside barrier)
       drawFishWave(t);
+      // Shark wave (drawn over everything, with surf waves)
+      drawSharkWave(t);
 
       // Lightning storm (drawn on top of everything)
       drawLightningStorm(t);
