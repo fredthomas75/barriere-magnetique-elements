@@ -107,28 +107,33 @@
 
     .controls {
       position: fixed;
-      bottom: 30px;
+      bottom: 8px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
       pointer-events: all;
       z-index: 20;
+      max-width: 95vw;
+      padding: 0 10px;
     }
 
     .btn {
       font-family: 'Orbitron', monospace;
-      font-size: clamp(11px, 2vw, 15px);
+      font-size: clamp(8px, 1.4vw, 11px);
       font-weight: 700;
-      letter-spacing: 2px;
-      padding: 14px 36px;
+      letter-spacing: 1px;
+      padding: 10px 16px;
       border: none;
-      border-radius: 50px;
+      border-radius: 30px;
       cursor: pointer;
       transition: all 0.3s ease;
       text-transform: uppercase;
       position: relative;
       overflow: hidden;
+      white-space: nowrap;
     }
 
     .btn::before {
@@ -334,6 +339,34 @@
     @keyframes sharkPulse {
       0%, 100% { transform: scale(1.02); }
       50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,100,200,0.8), 0 0 80px rgba(0,180,255,0.5); }
+    }
+
+    .btn-tornado {
+      background: linear-gradient(135deg, #555566, #888899, #aabbcc, #667788, #445566, #99aabb);
+      background-size: 500% 500%;
+      color: #111;
+      font-size: clamp(8px, 1.4vw, 11px);
+      font-weight: 800;
+      text-shadow: 0 1px 2px rgba(200,220,240,0.4);
+      box-shadow: 0 0 25px rgba(100,120,150,0.4), 0 0 50px rgba(150,170,200,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: tornadoSpin 2s linear infinite;
+      display: none;
+      border: 2px solid rgba(150,170,200,0.5);
+    }
+    .btn-tornado:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px rgba(120,140,180,0.6), 0 0 70px rgba(170,190,220,0.4);
+    }
+    .btn-tornado:active { transform: scale(0.95); }
+    .btn-tornado.tornado-active {
+      animation: tornadoSpin 0.3s linear infinite;
+      border-color: #fff;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(255,255,255,0.8);
+    }
+    @keyframes tornadoSpin {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 100% 100%; }
     }
 
     .btn-metalwave {
@@ -624,6 +657,9 @@
     </button>
     <button class="btn btn-sharkwave" id="btnSharkWave" onclick="triggerSharkWave()">
       🦈 REQUINS 🦈
+    </button>
+    <button class="btn btn-tornado" id="btnTornado" onclick="triggerTornado()">
+      🌪️ TORNADE 🌪️
     </button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">
       VAGUE METAL
@@ -951,8 +987,8 @@
       const doorX = hx - doorW / 2;
       const doorY = hy + hh * 0.7 - doorH;
       const doorGrad = ctx.createLinearGradient(doorX, doorY, doorX + doorW, doorY + doorH);
-      doorGrad.addColorStop(0, '#3a2618');
-      doorGrad.addColorStop(1, '#2a1a10');
+      doorGrad.addColorStop(0, '#cc2222');
+      doorGrad.addColorStop(1, '#881111');
       ctx.fillStyle = doorGrad;
       ctx.beginPath();
       ctx.moveTo(doorX, doorY + doorH);
@@ -3187,6 +3223,7 @@
       document.getElementById('btnLightning').style.display = 'block';
       document.getElementById('btnFishWave').style.display = 'block';
       document.getElementById('btnSharkWave').style.display = 'block';
+      document.getElementById('btnTornado').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
 
@@ -3218,6 +3255,8 @@
       document.getElementById('btnFishWave').classList.remove('fishwave-active');
       document.getElementById('btnSharkWave').style.display = 'none';
       document.getElementById('btnSharkWave').classList.remove('sharkwave-active');
+      document.getElementById('btnTornado').style.display = 'none';
+      document.getElementById('btnTornado').classList.remove('tornado-active');
       document.getElementById('btnMetalWave').style.display = 'none';
       document.getElementById('btnMetalWave').classList.remove('active-wave');
       document.getElementById('btnUltraBoost').style.display = 'none';
@@ -3230,6 +3269,9 @@
       fishWaveFish = [];
       sharkWaveActive = false;
       sharkWaveSharks = [];
+      tornadoActive = false;
+      tornadoCaughtMonsters = [];
+      tornadoDebris = [];
       waterLevel = 0;
       floatingMonsters = [];
 
@@ -5307,6 +5349,285 @@
       ctx.restore();
     }
 
+    // ===== TORNADE =====
+    let tornadoActive = false;
+    let tornadoTimer = 0;
+    const TORNADO_DURATION = 480; // ~8 seconds
+    let tornadoAngle = 0;
+    let tornadoX = 0, tornadoY = 0;
+    let tornadoCaughtMonsters = [];
+    let tornadoDebris = [];
+
+    function triggerTornado() {
+      if (tornadoActive) return;
+      tornadoActive = true;
+      tornadoTimer = 0;
+      tornadoAngle = Math.random() * Math.PI * 2;
+      tornadoCaughtMonsters = [];
+      tornadoDebris = [];
+      // Start from edge of screen
+      tornadoX = Math.random() < 0.5 ? -50 : W + 50;
+      tornadoY = H * 0.6;
+      document.getElementById('btnTornado').classList.add('tornado-active');
+
+      // Wind howl sound
+      try {
+        initAudio();
+        if (audioCtx) {
+          const bufSize = audioCtx.sampleRate * 5;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t = i / audioCtx.sampleRate;
+            const env = Math.min(1, t * 0.8) * Math.exp(-t * 0.25);
+            d[i] = (Math.random() * 2 - 1) * env * 0.12;
+            d[i] += Math.sin(t * 60 + Math.sin(t * 8) * 10) * env * 0.06;
+            d[i] += Math.sin(t * 120 + Math.sin(t * 3) * 20) * env * 0.04;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const bp = audioCtx.createBiquadFilter();
+          bp.type = 'bandpass';
+          bp.frequency.value = 250;
+          bp.Q.value = 2;
+          const g = audioCtx.createGain();
+          g.gain.value = 0.35;
+          src.connect(bp); bp.connect(g); g.connect(audioCtx.destination);
+          src.start();
+        }
+      } catch(e) {}
+    }
+
+    function updateTornado(t) {
+      if (!tornadoActive) return;
+      tornadoTimer++;
+      tornadoAngle += 0.08;
+
+      // Move tornado towards barrier area then circle around it
+      if (tornadoTimer < 60) {
+        // Approach
+        const targetX = centerX + Math.cos(tornadoTimer * 0.05) * (barrierRadius + 60);
+        const targetY = (centerY + 20) + Math.sin(tornadoTimer * 0.05) * (barrierRadius + 60) * 0.55;
+        tornadoX += (targetX - tornadoX) * 0.05;
+        tornadoY += (targetY - tornadoY) * 0.05;
+      } else if (tornadoTimer < 360) {
+        // Circle around the barrier, catching monsters
+        const orbitT = (tornadoTimer - 60) * 0.012;
+        tornadoX = centerX + Math.cos(orbitT) * (barrierRadius + 70);
+        tornadoY = (centerY + 20) + Math.sin(orbitT) * (barrierRadius + 70) * 0.55;
+
+        // Catch approaching monsters
+        for (const m of monsters) {
+          if (m.state !== 'approaching' && m.state !== 'idle') continue;
+          if (tornadoCaughtMonsters.some(tc => tc.monster === m)) continue;
+          const dx = m.x - tornadoX;
+          const dy = m.y - tornadoY;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 80) {
+            m.state = 'caught';
+            tornadoCaughtMonsters.push({
+              monster: m,
+              angle: Math.atan2(dy, dx),
+              dist: d,
+              spinSpeed: 0.08 + Math.random() * 0.06,
+              liftSpeed: 0,
+              timer: 0,
+              ejected: false
+            });
+          }
+        }
+      } else {
+        // Move upward and off screen
+        tornadoY -= 3;
+        tornadoX += Math.sin(tornadoTimer * 0.05) * 2;
+      }
+
+      // Update caught monsters — spin them around the tornado
+      for (let i = tornadoCaughtMonsters.length - 1; i >= 0; i--) {
+        const tc = tornadoCaughtMonsters[i];
+        const m = tc.monster;
+        if (!monsters.includes(m)) {
+          tornadoCaughtMonsters.splice(i, 1);
+          continue;
+        }
+        tc.timer++;
+        tc.angle += tc.spinSpeed;
+        tc.spinSpeed += 0.002; // spin faster over time
+
+        if (tc.timer < 90) {
+          // Pull inward while spinning
+          tc.dist = Math.max(15, tc.dist - 0.5);
+          m.x = tornadoX + Math.cos(tc.angle) * tc.dist;
+          m.y = tornadoY + Math.sin(tc.angle) * tc.dist - tc.timer * 0.3;
+        } else if (!tc.ejected) {
+          // EJECT to space!
+          tc.ejected = true;
+          m.state = 'hit';
+          m.hitTime = performance.now();
+          const ejectAngle = tc.angle - Math.PI * 0.3;
+          m.flyVx = Math.cos(ejectAngle) * (8 + Math.random() * 6);
+          m.flyVy = -10 - Math.random() * 8;
+          m.flyRotSpeed = tc.spinSpeed * 3;
+          monstersDefeated++;
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          shakeAmount = 6;
+
+          // Eject particles
+          for (let p = 0; p < 15; p++) {
+            impactParticles.push(new ImpactParticle(
+              m.x + (Math.random() - 0.5) * 20,
+              m.y + (Math.random() - 0.5) * 20,
+              `rgba(${150 + Math.random() * 105}, ${150 + Math.random() * 105}, ${150 + Math.random() * 105}, 1)`
+            ));
+          }
+          tornadoCaughtMonsters.splice(i, 1);
+        }
+      }
+
+      // Spawn debris particles
+      if (tornadoTimer < 400 && tornadoTimer % 2 === 0) {
+        tornadoDebris.push({
+          x: tornadoX + (Math.random() - 0.5) * 40,
+          y: tornadoY + Math.random() * 60,
+          vx: (Math.random() - 0.5) * 3,
+          vy: -2 - Math.random() * 4,
+          angle: Math.random() * Math.PI * 2,
+          spin: (Math.random() - 0.5) * 0.3,
+          size: 2 + Math.random() * 4,
+          life: 1,
+          type: Math.floor(Math.random() * 3) // 0=dust, 1=leaf, 2=rock
+        });
+      }
+
+      // Update debris
+      for (let i = tornadoDebris.length - 1; i >= 0; i--) {
+        const d = tornadoDebris[i];
+        // Spiral around tornado
+        const dx = d.x - tornadoX;
+        const dy = d.y - tornadoY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const pull = Math.max(0.5, 80 - dist) * 0.02;
+        const tang = Math.atan2(dy, dx) + Math.PI * 0.5;
+        d.vx += Math.cos(tang) * pull + (tornadoX - d.x) * 0.01;
+        d.vy += Math.sin(tang) * pull + (tornadoY - d.y) * 0.005 - 0.1;
+        d.x += d.vx;
+        d.y += d.vy;
+        d.angle += d.spin;
+        d.life -= 0.008;
+        if (d.life <= 0) tornadoDebris.splice(i, 1);
+      }
+
+      // End tornado
+      if (tornadoTimer >= TORNADO_DURATION && tornadoCaughtMonsters.length === 0) {
+        tornadoActive = false;
+        tornadoDebris = [];
+        document.getElementById('btnTornado').classList.remove('tornado-active');
+      }
+    }
+
+    function drawTornado(t) {
+      if (!tornadoActive && tornadoDebris.length === 0) return;
+      ctx.save();
+
+      const tx = tornadoX;
+      const ty = tornadoY;
+
+      // Funnel — widest at bottom, narrow at top
+      const funnelH = 180;
+      const bottomW = 70;
+      const topW = 12;
+      const segments = 20;
+
+      // Wind distortion overlay (darkens sky near tornado)
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      const stormGrad = ctx.createRadialGradient(tx, ty - funnelH * 0.4, 0, tx, ty - funnelH * 0.4, 200);
+      stormGrad.addColorStop(0, 'rgba(40,45,50,1)');
+      stormGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = stormGrad;
+      ctx.fillRect(tx - 200, ty - funnelH - 50, 400, funnelH + 100);
+      ctx.restore();
+
+      // Draw funnel layers
+      for (let i = 0; i < segments; i++) {
+        const p = i / segments;
+        const y = ty - p * funnelH;
+        const w = bottomW * (1 - p) + topW * p;
+        const wobble = Math.sin(tornadoAngle * 2 + p * 8) * (w * 0.15);
+        const x = tx + wobble;
+
+        // Multiple rotating bands
+        const bandAlpha = 0.3 + Math.sin(tornadoAngle * 3 + p * 12) * 0.15;
+        const grayVal = 100 + p * 80 + Math.sin(tornadoAngle + p * 5) * 30;
+        ctx.save();
+        ctx.globalAlpha = bandAlpha;
+        ctx.beginPath();
+        ctx.ellipse(x, y, w, w * 0.3, Math.sin(tornadoAngle + p * 2) * 0.2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${grayVal}, ${grayVal + 5}, ${grayVal + 15})`;
+        ctx.fill();
+        ctx.restore();
+
+        // Swirl lines
+        if (i % 3 === 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.25;
+          ctx.beginPath();
+          const swirlAngle = tornadoAngle * 2.5 + p * 10;
+          ctx.arc(x, y, w * 0.8, swirlAngle, swirlAngle + Math.PI * 0.6);
+          ctx.strokeStyle = `rgba(${grayVal + 40}, ${grayVal + 45}, ${grayVal + 55}, 0.6)`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Ground dust cloud
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      for (let i = 0; i < 6; i++) {
+        const dustX = tx + Math.sin(tornadoAngle * 1.5 + i * 1.2) * (50 + i * 15);
+        const dustY = ty + 10 + Math.sin(tornadoAngle + i) * 8;
+        const dustR = 20 + i * 8 + Math.sin(tornadoAngle * 2 + i * 3) * 5;
+        ctx.beginPath();
+        ctx.ellipse(dustX, dustY, Math.max(1, dustR), Math.max(1, dustR * 0.3), 0, 0, Math.PI * 2);
+        ctx.fillStyle = daylight > 0.5 ? `rgba(160, 140, 110, 0.3)` : `rgba(60, 55, 45, 0.3)`;
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Draw debris
+      for (const d of tornadoDebris) {
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.angle);
+        ctx.globalAlpha = d.life;
+        if (d.type === 0) {
+          // Dust particle
+          ctx.fillStyle = daylight > 0.5 ? '#b0a080' : '#504838';
+          ctx.fillRect(-d.size * 0.5, -d.size * 0.5, d.size, d.size);
+        } else if (d.type === 1) {
+          // Leaf
+          ctx.fillStyle = '#4a7a30';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, d.size, d.size * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Rock
+          ctx.fillStyle = '#706050';
+          ctx.beginPath();
+          ctx.moveTo(-d.size, 0);
+          ctx.lineTo(0, -d.size * 0.8);
+          ctx.lineTo(d.size, 0);
+          ctx.lineTo(0, d.size * 0.6);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     // ===== ULTRA BOOST =====
     function triggerUltraBoost() {
       if (!barrierActive || ultraBoostActive) return;
@@ -5503,6 +5824,7 @@
     document.getElementById('btnLightning').style.display = 'none';
     document.getElementById('btnFishWave').style.display = 'none';
     document.getElementById('btnSharkWave').style.display = 'none';
+    document.getElementById('btnTornado').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -5905,6 +6227,8 @@
       updateFishWave(t);
       // Shark wave
       updateSharkWave(t);
+      // Tornado
+      updateTornado(t);
 
       // Spawn monsters, fire projectiles, and water waves
       spawnMonster(t);
@@ -5971,6 +6295,8 @@
       // Shark wave (drawn over everything, with surf waves)
       drawSharkWave(t);
 
+      // Tornado (drawn on top)
+      drawTornado(t);
       // Lightning storm (drawn on top of everything)
       drawLightningStorm(t);
 
