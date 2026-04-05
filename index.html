@@ -242,28 +242,310 @@
     // Death lights array (colored point lights at monster death positions)
     const deathLights = [];
 
-    // ===== SKY =====
+    // ===== SKY SYSTEM =====
+    scene.background = null;
+
+    // --- Sky Dome ---
+    const skyDomeGeo = new THREE.SphereGeometry(200, 32, 32);
+    const skyDomeMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uDaylight: { value: 0 }
+      },
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uDaylight;
+        varying vec3 vWorldPos;
+        void main() {
+          float h = normalize(vWorldPos).y;
+          float elevation = max(h, 0.0);
+          float d = uDaylight;
+          // Night colors
+          vec3 nightHorizon = vec3(0.03, 0.03, 0.08);
+          vec3 nightZenith = vec3(0.01, 0.01, 0.06);
+          vec3 nightMid = vec3(0.04, 0.02, 0.08);
+          vec3 nightCol = mix(nightHorizon, mix(nightMid, nightZenith, elevation), elevation);
+          // Day colors
+          vec3 dayHorizon = vec3(0.55, 0.75, 0.92);
+          vec3 dayZenith = vec3(0.15, 0.35, 0.75);
+          vec3 dayCol = mix(dayHorizon, dayZenith, elevation);
+          // Dawn/dusk colors
+          vec3 dawnHorizon = vec3(0.9, 0.45, 0.2);
+          vec3 dawnMid = vec3(0.6, 0.3, 0.5);
+          vec3 dawnZenith = vec3(0.25, 0.2, 0.5);
+          vec3 dawnCol = mix(dawnHorizon, mix(dawnMid, dawnZenith, elevation), elevation);
+          // Blend based on daylight
+          vec3 col;
+          if (d < 0.3) {
+            col = mix(nightCol, dawnCol, d / 0.3);
+          } else if (d < 0.6) {
+            col = mix(dawnCol, dayCol, (d - 0.3) / 0.3);
+          } else {
+            col = dayCol;
+          }
+          // Below horizon: darker ground color
+          if (h < 0.0) {
+            col = mix(col, vec3(0.02, 0.04, 0.02), min(1.0, -h * 5.0));
+          }
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+    const skyDome = new THREE.Mesh(skyDomeGeo, skyDomeMat);
+    scene.add(skyDome);
+
+    // --- Stars ---
+    const starCount = 300;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    const starSizes = new Float32Array(starCount);
+    const starPhases = new Float32Array(starCount);
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(Math.random() * 0.8 + 0.2); // upper hemisphere mostly
+      const r = 180;
+      starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = r * Math.cos(phi);
+      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      starSizes[i] = 0.5 + Math.random() * 1.5;
+      starPhases[i] = Math.random() * Math.PI * 2;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff, size: 1.0, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+    });
+    const stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
+
+    // --- Sun mesh ---
+    const sunGeo = new THREE.SphereGeometry(2, 16, 16);
+    const sunMeshMat = new THREE.MeshBasicMaterial({ color: 0xffffcc });
+    const sunMesh = new THREE.Mesh(sunGeo, sunMeshMat);
+    sunMesh.visible = false;
+    scene.add(sunMesh);
+    // Sun glow sprite
+    const sunGlowCanvas = document.createElement('canvas');
+    sunGlowCanvas.width = 128; sunGlowCanvas.height = 128;
+    const sgCtx = sunGlowCanvas.getContext('2d');
+    const sgGrad = sgCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    sgGrad.addColorStop(0, 'rgba(255,255,200,0.8)');
+    sgGrad.addColorStop(0.3, 'rgba(255,220,100,0.3)');
+    sgGrad.addColorStop(1, 'rgba(255,200,50,0)');
+    sgCtx.fillStyle = sgGrad;
+    sgCtx.fillRect(0, 0, 128, 128);
+    const sunGlowTex = new THREE.CanvasTexture(sunGlowCanvas);
+    const sunGlowMat = new THREE.SpriteMaterial({ map: sunGlowTex, blending: THREE.AdditiveBlending, transparent: true, opacity: 0 });
+    const sunGlow = new THREE.Sprite(sunGlowMat);
+    sunGlow.scale.set(18, 18, 1);
+    scene.add(sunGlow);
+
+    // --- Moon mesh with craters ---
+    const moonCanvas = document.createElement('canvas');
+    moonCanvas.width = 128; moonCanvas.height = 128;
+    const mCtx = moonCanvas.getContext('2d');
+    mCtx.fillStyle = '#dde4ee';
+    mCtx.fillRect(0, 0, 128, 128);
+    // Draw craters
+    const craterData = [[30,40,12],[75,25,8],[55,70,10],[90,55,7],[20,85,6],[60,30,5],[40,60,9]];
+    craterData.forEach(([cx2,cy2,cr]) => {
+      mCtx.beginPath();
+      mCtx.arc(cx2, cy2, cr, 0, Math.PI * 2);
+      mCtx.fillStyle = 'rgba(160,170,185,0.6)';
+      mCtx.fill();
+      mCtx.beginPath();
+      mCtx.arc(cx2 - cr * 0.2, cy2 - cr * 0.2, cr * 0.6, 0, Math.PI * 2);
+      mCtx.fillStyle = 'rgba(140,150,165,0.4)';
+      mCtx.fill();
+    });
+    const moonTex = new THREE.CanvasTexture(moonCanvas);
+    const moonMeshGeo = new THREE.SphereGeometry(1.2, 16, 16);
+    const moonMeshMat = new THREE.MeshBasicMaterial({ map: moonTex });
+    const moonMesh = new THREE.Mesh(moonMeshGeo, moonMeshMat);
+    moonMesh.visible = false;
+    scene.add(moonMesh);
+    // Moon glow
+    const moonGlowCanvas = document.createElement('canvas');
+    moonGlowCanvas.width = 128; moonGlowCanvas.height = 128;
+    const mgCtx = moonGlowCanvas.getContext('2d');
+    const mgGrad = mgCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    mgGrad.addColorStop(0, 'rgba(200,210,240,0.5)');
+    mgGrad.addColorStop(0.4, 'rgba(180,190,220,0.15)');
+    mgGrad.addColorStop(1, 'rgba(150,160,200,0)');
+    mgCtx.fillStyle = mgGrad;
+    mgCtx.fillRect(0, 0, 128, 128);
+    const moonGlowTex = new THREE.CanvasTexture(moonGlowCanvas);
+    const moonGlowMat = new THREE.SpriteMaterial({ map: moonGlowTex, blending: THREE.AdditiveBlending, transparent: true, opacity: 0 });
+    const moonGlowSprite = new THREE.Sprite(moonGlowMat);
+    moonGlowSprite.scale.set(8, 8, 1);
+    scene.add(moonGlowSprite);
+
+    // --- Clouds ---
+    const cloudMeshes = [];
+    for (let ci = 0; ci < 18; ci++) {
+      const cGroup = new THREE.Group();
+      const puffCount = 4 + Math.floor(Math.random() * 4);
+      const cloudWhiteMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff, roughness: 1.0, metalness: 0, transparent: true, opacity: 0.85
+      });
+      for (let pi = 0; pi < puffCount; pi++) {
+        const pr = 0.8 + Math.random() * 1.2;
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(pr, 8, 6), cloudWhiteMat.clone());
+        puff.position.set((pi - puffCount / 2) * pr * 0.7, (Math.random() - 0.3) * 0.5, (Math.random() - 0.5) * pr * 0.5);
+        puff.scale.y = 0.5 + Math.random() * 0.3;
+        cGroup.add(puff);
+      }
+      const angle = (ci / 18) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = 30 + Math.random() * 60;
+      cGroup.position.set(Math.cos(angle) * dist, 25 + Math.random() * 10, Math.sin(angle) * dist);
+      cGroup.userData = { driftSpeed: 0.005 + Math.random() * 0.01, baseAngle: angle, baseDist: dist };
+      cGroup.visible = false;
+      scene.add(cGroup);
+      cloudMeshes.push(cGroup);
+    }
+
+    // --- Weather particles (rain / snow) ---
+    const weatherPartCount = 600;
+    const weatherPartGeo = new THREE.BufferGeometry();
+    const weatherPartPos = new Float32Array(weatherPartCount * 3);
+    for (let wi = 0; wi < weatherPartCount; wi++) {
+      weatherPartPos[wi * 3] = (Math.random() - 0.5) * 60;
+      weatherPartPos[wi * 3 + 1] = Math.random() * 30;
+      weatherPartPos[wi * 3 + 2] = (Math.random() - 0.5) * 60;
+    }
+    weatherPartGeo.setAttribute('position', new THREE.BufferAttribute(weatherPartPos, 3));
+    const weatherPartMat = new THREE.PointsMaterial({
+      color: 0xaabbcc, size: 0.12, transparent: true, opacity: 0, depthWrite: false
+    });
+    const weatherParticles = new THREE.Points(weatherPartGeo, weatherPartMat);
+    weatherParticles.visible = false;
+    scene.add(weatherParticles);
+
+    // Sky update function
     function updateSky() {
       const d = daylight;
-      const r = 0.01 + d * 0.35;
-      const g = 0.01 + d * 0.55;
-      const b = 0.06 + d * 0.75;
-      scene.background = new THREE.Color(r, g, b);
-      scene.fog = new THREE.Fog(new THREE.Color(r, g, b), 40, 80);
+      const t = clock.getElapsedTime();
 
-      // Update lighting
+      // Sky dome
+      skyDomeMat.uniforms.uDaylight.value = d;
+
+      // Fog
+      const fr = 0.01 + d * 0.35, fg = 0.01 + d * 0.55, fb = 0.06 + d * 0.75;
+      const fogColor = new THREE.Color(fr, fg, fb);
+      const wCode = weather.weatherCode;
+      const isFog = (wCode === 45 || wCode === 48);
+      const fogNear = isFog ? 5 : 40;
+      const fogFar = isFog ? 30 : 80;
+      scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+
+      // Lighting
       sunLight.intensity = d * 1.2;
       sunLight.color.setHSL(0.1, 0.6, 0.5 + d * 0.5);
       const sunAngle = (daylight - 0.5) * Math.PI;
       sunLight.position.set(Math.cos(sunAngle) * 20, Math.sin(sunAngle) * 20 + 5, 8);
-
       moonLight.intensity = (1 - d) * 0.2;
       ambientLight.intensity = 0.15 + d * 0.4;
       ambientLight.color.setHSL(0.6, 0.3, 0.3 + d * 0.4);
-
       renderer.toneMappingExposure = 0.5 + d * 0.8;
-      // Update hemisphere light
       hemiLight.intensity = 0.15 + d * 0.3;
+
+      // Stars
+      const starOpacity = d < 0.3 ? 1.0 - d / 0.3 : d < 0.5 ? (0.5 - d) / 0.2 * 0.3 : 0;
+      starMat.opacity = starOpacity * 0.8;
+      // Twinkle
+      const sizes = starGeo.attributes.size.array;
+      for (let si = 0; si < starCount; si++) {
+        sizes[si] = starSizes[si] * (0.6 + 0.4 * Math.sin(t * (1.5 + si * 0.01) + starPhases[si]));
+      }
+      starGeo.attributes.size.needsUpdate = true;
+
+      // Sun mesh
+      sunMesh.visible = d > 0.3;
+      sunGlow.visible = d > 0.3;
+      if (d > 0.3) {
+        const sp = sunLight.position;
+        sunMesh.position.set(sp.x * 4, sp.y * 4, sp.z * 4);
+        sunGlow.position.copy(sunMesh.position);
+        const sunOp = Math.min(1, (d - 0.3) / 0.3);
+        sunGlowMat.opacity = sunOp * 0.6;
+      }
+
+      // Moon mesh
+      moonMesh.visible = d < 0.5;
+      moonGlowSprite.visible = d < 0.5;
+      if (d < 0.5) {
+        const mp = moonLight.position;
+        moonMesh.position.set(mp.x * 4, mp.y * 4, mp.z * 4);
+        moonGlowSprite.position.copy(moonMesh.position);
+        const moonOp = d < 0.3 ? 1.0 : 1.0 - (d - 0.3) / 0.2;
+        moonGlowMat.opacity = moonOp * 0.4;
+        moonMesh.rotation.y = t * 0.01;
+      }
+
+      // Clouds
+      const cc = weather.cloudCover;
+      const visibleClouds = Math.round((cc / 100) * cloudMeshes.length);
+      cloudMeshes.forEach((cg, idx) => {
+        cg.visible = idx < visibleClouds;
+        if (!cg.visible) return;
+        // Drift
+        const ud2 = cg.userData;
+        ud2.baseAngle += ud2.driftSpeed * 0.01;
+        const cx = Math.cos(ud2.baseAngle) * ud2.baseDist;
+        const cz = Math.sin(ud2.baseAngle) * ud2.baseDist;
+        cg.position.x = cx;
+        cg.position.z = cz;
+        // Color: white day, dark night, orange dawn
+        cg.children.forEach(puff => {
+          if (d > 0.6) {
+            const gray = cc > 70 ? 0.6 : 0.9;
+            puff.material.color.setRGB(gray, gray, gray);
+          } else if (d > 0.2) {
+            const blend = (d - 0.2) / 0.4;
+            puff.material.color.setRGB(0.9 * blend + 0.3 * (1 - blend), 0.6 * blend + 0.15 * (1 - blend), 0.4 * blend + 0.15 * (1 - blend));
+          } else {
+            puff.material.color.setRGB(0.15, 0.15, 0.18);
+          }
+          puff.material.opacity = cc > 70 ? 0.95 : 0.8;
+        });
+      });
+
+      // Weather particles (rain / snow)
+      const isRain = (wCode >= 51 && wCode <= 67) || (wCode >= 80 && wCode <= 82);
+      const isSnow = (wCode >= 71 && wCode <= 86);
+      weatherParticles.visible = isRain || isSnow;
+      if (isRain || isSnow) {
+        const wArr = weatherPartGeo.attributes.position.array;
+        const dropSpeed = isRain ? 0.5 : 0.08;
+        const drift = isSnow ? 0.02 : 0;
+        weatherPartMat.opacity = isRain ? 0.4 : 0.6;
+        weatherPartMat.size = isRain ? 0.1 : 0.2;
+        weatherPartMat.color.set(isRain ? 0x8899aa : 0xffffff);
+        for (let wi = 0; wi < weatherPartCount; wi++) {
+          wArr[wi * 3 + 1] -= dropSpeed;
+          if (isSnow) wArr[wi * 3] += Math.sin(t + wi) * drift;
+          if (wArr[wi * 3 + 1] < 0) {
+            wArr[wi * 3] = (Math.random() - 0.5) * 60;
+            wArr[wi * 3 + 1] = 25 + Math.random() * 10;
+            wArr[wi * 3 + 2] = (Math.random() - 0.5) * 60;
+          }
+        }
+        weatherPartGeo.attributes.position.needsUpdate = true;
+      }
+
+      // Rain/snow tint on ambient
+      if (isRain) {
+        ambientLight.color.setHSL(0.6, 0.2, 0.25 + d * 0.2);
+        renderer.toneMappingExposure = Math.max(0.4, renderer.toneMappingExposure - 0.15);
+      }
     }
 
     // ===== GROUND =====
@@ -570,102 +852,247 @@
     const monsters = [];
     let lastSpawnTime = 0;
 
+    // Monsters Inc palette
+    const MONSTER_COLORS = [
+      0x44cc55, 0x8844dd, 0x2299ee, 0xff7722, 0x22bbaa,
+      0xee4488, 0x88cc22, 0x6644ff, 0xffaa00, 0x44ddcc,
+      0xdd5577, 0x55aaff, 0xaadd44, 0xff6688, 0x33ccaa
+    ];
+
+    function createMonsterSpotTexture(baseColor) {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d');
+      const bc = new THREE.Color(baseColor);
+      ctx.fillStyle = `rgb(${Math.round(bc.r*255)},${Math.round(bc.g*255)},${Math.round(bc.b*255)})`;
+      ctx.fillRect(0, 0, 128, 128);
+      const pattern = Math.random();
+      if (pattern < 0.4) {
+        // Spots
+        const spotCount = 5 + Math.floor(Math.random() * 8);
+        const spotColor = bc.clone().offsetHSL(0.05, -0.1, -0.15);
+        ctx.fillStyle = `rgb(${Math.round(spotColor.r*255)},${Math.round(spotColor.g*255)},${Math.round(spotColor.b*255)})`;
+        for (let s2 = 0; s2 < spotCount; s2++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 128, Math.random() * 128, 5 + Math.random() * 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (pattern < 0.65) {
+        // Stripes
+        const stripeColor = bc.clone().offsetHSL(0.1, 0, -0.1);
+        ctx.fillStyle = `rgb(${Math.round(stripeColor.r*255)},${Math.round(stripeColor.g*255)},${Math.round(stripeColor.b*255)})`;
+        const stripeW = 8 + Math.random() * 10;
+        for (let sx = 0; sx < 128; sx += stripeW * 2) {
+          ctx.fillRect(sx, 0, stripeW, 128);
+        }
+      }
+      // else plain
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
     function createMonster() {
       const group = new THREE.Group();
       const size = 0.6 + Math.random() * 0.5;
-      const hue = Math.random();
+      const bodyColor = MONSTER_COLORS[Math.floor(Math.random() * MONSTER_COLORS.length)];
 
-      // Deformed body using IcosahedronGeometry with vertex displacement
-      const bodyGeo2 = new THREE.IcosahedronGeometry(size, 2);
-      const posAttr = bodyGeo2.attributes.position;
-      for (let v = 0; v < posAttr.count; v++) {
-        const x = posAttr.getX(v), y = posAttr.getY(v), z = posAttr.getZ(v);
-        const len = Math.sqrt(x*x + y*y + z*z);
-        const noise = 1.0 + (Math.random() - 0.5) * 0.4;
-        posAttr.setXYZ(v, x/len * size * noise, y/len * size * noise, z/len * size * noise);
+      // Body shape variety
+      const shapeType = Math.floor(Math.random() * 4);
+      let bodyGeo2;
+      if (shapeType === 0) {
+        // Round
+        bodyGeo2 = new THREE.SphereGeometry(size, 12, 10);
+      } else if (shapeType === 1) {
+        // Tall thin
+        bodyGeo2 = new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 8, 12);
+      } else if (shapeType === 2) {
+        // Wide squat
+        bodyGeo2 = new THREE.SphereGeometry(size, 12, 10);
+        bodyGeo2.scale(1.3, 0.7, 1.0);
+      } else {
+        // Pear-shaped (deformed sphere)
+        bodyGeo2 = new THREE.SphereGeometry(size, 12, 10);
+        const bpos = bodyGeo2.attributes.position;
+        for (let bv = 0; bv < bpos.count; bv++) {
+          const by = bpos.getY(bv);
+          const widen = 1.0 + Math.max(0, -by / size) * 0.4;
+          bpos.setX(bv, bpos.getX(bv) * widen);
+          bpos.setZ(bv, bpos.getZ(bv) * widen);
+        }
+        bodyGeo2.computeVertexNormals();
       }
-      bodyGeo2.computeVertexNormals();
 
-      // Dark body with glowing veins/cracks (emissive material)
+      // Fuzzy/rough material with optional pattern texture
+      const hasPattern = Math.random() > 0.4;
       const bodyMat2 = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(hue, 0.6, 0.12),
-        emissive: new THREE.Color().setHSL(hue, 1.0, 0.3),
-        emissiveIntensity: 0.4,
-        roughness: 0.7, metalness: 0.3
+        color: bodyColor,
+        roughness: 0.85,
+        metalness: 0.05,
+        ...(hasPattern ? { map: createMonsterSpotTexture(bodyColor) } : {})
       });
       const monsterBody = new THREE.Mesh(bodyGeo2, bodyMat2);
       monsterBody.castShadow = true;
       group.add(monsterBody);
 
-      // Multiple glowing eyes (3-5 randomly placed)
-      const eyeCount = 3 + Math.floor(Math.random() * 3);
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
-      const eyeGlowMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+      // --- BIG EXPRESSIVE EYES ---
+      const eyeCount = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
+      const eyeSize = size * (0.2 + Math.random() * 0.15); // comically large
+      const irisHues = [0x3366cc, 0x44aa44, 0x996633, 0x663399, 0xcc6633, 0x339999];
+      const irisColor = irisHues[Math.floor(Math.random() * irisHues.length)];
+      const eyeObjs = [];
+
       for (let e = 0; e < eyeCount; e++) {
-        const theta = (Math.random() - 0.3) * Math.PI * 0.6;
-        const phi = (Math.random() - 0.5) * Math.PI * 0.8;
-        const ex = Math.sin(phi) * Math.cos(theta) * size * 0.9;
-        const ey = Math.sin(theta) * size * 0.5 + size * 0.15;
-        const ez = Math.cos(phi) * Math.cos(theta) * size * 0.9;
-        const eyeSize = size * (0.06 + Math.random() * 0.08);
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSize, 6, 6), eyeMat);
-        eye.position.set(ex, ey, ez);
-        group.add(eye);
-        // Glow ring around eye
-        const ring = new THREE.Mesh(new THREE.RingGeometry(eyeSize * 0.8, eyeSize * 1.4, 8), eyeGlowMat);
-        ring.position.copy(eye.position);
-        ring.lookAt(eye.position.clone().multiplyScalar(2));
-        group.add(ring);
+        const eyeGroup = new THREE.Group();
+        // White sclera
+        const sclera = new THREE.Mesh(
+          new THREE.SphereGeometry(eyeSize, 10, 8),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 })
+        );
+        eyeGroup.add(sclera);
+        // Colored iris
+        const iris = new THREE.Mesh(
+          new THREE.CircleGeometry(eyeSize * 0.55, 12),
+          new THREE.MeshBasicMaterial({ color: irisColor })
+        );
+        iris.position.z = eyeSize * 0.95;
+        eyeGroup.add(iris);
+        // Black pupil
+        const pupil = new THREE.Mesh(
+          new THREE.CircleGeometry(eyeSize * 0.28, 10),
+          new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        pupil.position.z = eyeSize * 0.96;
+        eyeGroup.add(pupil);
+        // Pupil highlight
+        const highlight = new THREE.Mesh(
+          new THREE.CircleGeometry(eyeSize * 0.1, 6),
+          new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        highlight.position.set(eyeSize * 0.12, eyeSize * 0.12, eyeSize * 0.97);
+        eyeGroup.add(highlight);
+        // Eyelid (half-sphere on top)
+        const lidGeo = new THREE.SphereGeometry(eyeSize * 1.05, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.35);
+        const lid = new THREE.Mesh(lidGeo, new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.8 }));
+        lid.rotation.x = -0.1;
+        eyeGroup.add(lid);
+
+        // Position eyes on face
+        let ex, ey;
+        if (eyeCount === 1) {
+          ex = 0; ey = size * 0.3;
+        } else if (eyeCount === 2) {
+          ex = (e === 0 ? -1 : 1) * size * 0.35;
+          ey = size * 0.3;
+        } else {
+          if (e < 2) { ex = (e === 0 ? -1 : 1) * size * 0.35; ey = size * 0.35; }
+          else { ex = 0; ey = size * 0.6; }
+        }
+        eyeGroup.position.set(ex, ey, size * 0.75);
+        group.add(eyeGroup);
+        eyeObjs.push(eyeGroup);
       }
 
-      // Jagged teeth/mouth opening
+      // --- MOUTH (wide goofy grin) ---
       const mouthGroup = new THREE.Group();
-      const jawRadius = size * 0.35;
-      const teethCount = 7 + Math.floor(Math.random() * 4);
-      // Upper jaw arc (dark interior)
-      const mouthInner = new THREE.Mesh(
-        new THREE.CircleGeometry(jawRadius, 12, 0, Math.PI),
-        new THREE.MeshBasicMaterial({ color: 0x220000, side: THREE.DoubleSide })
-      );
-      mouthGroup.add(mouthInner);
-      // Jagged teeth
-      const toothMat = new THREE.MeshStandardMaterial({ color: 0xddcc99, roughness: 0.5 });
-      for (let ti = 0; ti < teethCount; ti++) {
-        const angle = (ti / teethCount) * Math.PI;
-        const tx = Math.cos(angle) * jawRadius;
-        const ty = Math.sin(angle) * jawRadius;
-        const toothH = size * (0.08 + Math.random() * 0.12);
-        const tooth = new THREE.Mesh(new THREE.ConeGeometry(size * 0.03, toothH, 3), toothMat);
-        tooth.position.set(tx, ty, 0);
-        tooth.lookAt(0, 0, 0);
-        mouthGroup.add(tooth);
+      const mouthStyle = Math.floor(Math.random() * 3); // 0=wide grin, 1=toothy, 2=open roar
+      const mouthW = size * 0.6;
+      const mouthH = size * 0.2;
+      // Dark mouth interior
+      const mouthShape = new THREE.Shape();
+      mouthShape.moveTo(-mouthW, 0);
+      mouthShape.quadraticCurveTo(0, mouthStyle === 2 ? -mouthH * 2.5 : -mouthH * 1.5, mouthW, 0);
+      if (mouthStyle === 2) {
+        mouthShape.quadraticCurveTo(0, mouthH * 0.5, -mouthW, 0);
+      } else {
+        mouthShape.lineTo(-mouthW, 0);
       }
-      mouthGroup.position.set(0, -size * 0.25, size * 0.8);
-      mouthGroup.lookAt(0, -size * 0.25, size * 2);
+      const mouthMesh = new THREE.Mesh(
+        new THREE.ShapeGeometry(mouthShape),
+        new THREE.MeshBasicMaterial({ color: 0x330011, side: THREE.DoubleSide })
+      );
+      mouthGroup.add(mouthMesh);
+
+      // Teeth
+      const toothMat = new THREE.MeshStandardMaterial({ color: 0xf0f0e0, roughness: 0.4 });
+      const teethCount = 3 + Math.floor(Math.random() * 4);
+      const hasUnderbite = Math.random() > 0.6;
+      const hasFangs = Math.random() > 0.5;
+      for (let ti = 0; ti < teethCount; ti++) {
+        const tx = -mouthW + (ti + 0.5) * (mouthW * 2 / teethCount);
+        const th = size * (0.06 + Math.random() * 0.06);
+        const tw = mouthW * 2 / teethCount * 0.7;
+        const isFang = hasFangs && (ti === 0 || ti === teethCount - 1);
+        if (isFang) {
+          const fang = new THREE.Mesh(new THREE.ConeGeometry(tw * 0.5, th * 2.5, 4), toothMat);
+          fang.position.set(tx, hasUnderbite ? -mouthH * 0.3 : 0.01, 0.01);
+          fang.rotation.z = Math.PI;
+          if (hasUnderbite) fang.rotation.z = 0;
+          mouthGroup.add(fang);
+        } else {
+          const tooth = new THREE.Mesh(new THREE.BoxGeometry(tw, th, 0.02), toothMat);
+          tooth.position.set(tx, hasUnderbite ? -mouthH * 0.8 : 0.01, 0.01);
+          mouthGroup.add(tooth);
+        }
+      }
+      mouthGroup.position.set(0, -size * 0.15, size * 0.85);
       group.add(mouthGroup);
 
-      // Tentacles / spikes protruding (ConeGeometry)
-      const spikeMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(hue, 0.8, 0.15),
-        emissive: new THREE.Color().setHSL(hue, 1.0, 0.2),
-        emissiveIntensity: 0.3, roughness: 0.6
-      });
-      const spikeCount = 5 + Math.floor(Math.random() * 5);
-      const spikes = [];
-      for (let s = 0; s < spikeCount; s++) {
-        const sTheta = Math.random() * Math.PI * 2;
-        const sPhi = (Math.random() - 0.5) * Math.PI;
-        const sLen = size * (0.4 + Math.random() * 0.5);
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(size * 0.06, sLen, 4), spikeMat);
-        spike.position.set(
-          Math.cos(sTheta) * Math.cos(sPhi) * size * 0.8,
-          Math.sin(sPhi) * size * 0.8,
-          Math.sin(sTheta) * Math.cos(sPhi) * size * 0.8
-        );
-        spike.lookAt(spike.position.clone().multiplyScalar(2));
-        spike.castShadow = true;
-        group.add(spike);
-        spikes.push(spike);
+      // --- HORNS ---
+      const hornStyle = Math.floor(Math.random() * 4); // 0=none, 1=small rounded, 2=tall curved, 3=antenna
+      const hornColor = new THREE.Color(bodyColor).offsetHSL(0.1, -0.1, 0.1);
+      const hornMat = new THREE.MeshStandardMaterial({ color: hornColor, roughness: 0.5 });
+      const horns = [];
+      if (hornStyle === 1) {
+        [-1, 1].forEach(side => {
+          const horn = new THREE.Mesh(new THREE.CapsuleGeometry(size * 0.06, size * 0.2, 4, 6), hornMat);
+          horn.position.set(side * size * 0.35, size * 0.8, size * 0.1);
+          horn.rotation.z = side * 0.4;
+          group.add(horn);
+          horns.push(horn);
+        });
+      } else if (hornStyle === 2) {
+        [-1, 1].forEach(side => {
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(size * 0.08, size * 0.5, 6), hornMat);
+          horn.position.set(side * size * 0.3, size * 0.9, 0);
+          horn.rotation.z = side * 0.3;
+          group.add(horn);
+          horns.push(horn);
+        });
+      } else if (hornStyle === 3) {
+        // Antenna style
+        [-1, 1].forEach(side => {
+          const stalk = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.02, size * 0.02, size * 0.5, 6), hornMat);
+          stalk.position.set(side * size * 0.2, size * 1.0, size * 0.2);
+          stalk.rotation.z = side * 0.2;
+          group.add(stalk);
+          const tip = new THREE.Mesh(new THREE.SphereGeometry(size * 0.06, 6, 6),
+            new THREE.MeshBasicMaterial({ color: new THREE.Color(bodyColor).offsetHSL(0, 0.2, 0.2) }));
+          tip.position.set(side * size * 0.28, size * 1.25, size * 0.2);
+          group.add(tip);
+          horns.push(stalk);
+        });
+      }
+
+      // --- STUBBY ARMS ---
+      if (Math.random() > 0.3) {
+        const armMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.85 });
+        [-1, 1].forEach(side => {
+          const arm = new THREE.Mesh(new THREE.CapsuleGeometry(size * 0.08, size * 0.25, 4, 6), armMat);
+          arm.position.set(side * size * 0.85, -size * 0.1, size * 0.15);
+          arm.rotation.z = side * 0.8;
+          group.add(arm);
+        });
+      }
+
+      // --- STUBBY LEGS ---
+      if (Math.random() > 0.25) {
+        const legMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.85 });
+        [-1, 1].forEach(side => {
+          const leg = new THREE.Mesh(new THREE.CapsuleGeometry(size * 0.1, size * 0.2, 4, 6), legMat);
+          leg.position.set(side * size * 0.3, -size * 0.85, 0);
+          group.add(leg);
+        });
       }
 
       // Spawn position (random point far away)
@@ -684,11 +1111,12 @@
         wobblePhase: Math.random() * Math.PI * 2,
         flyVel: new THREE.Vector3(),
         hitTime: 0,
-        currentDir: new THREE.Vector3(), // for lerped direction
+        currentDir: new THREE.Vector3(),
         breathPhase: Math.random() * Math.PI * 2,
         bodyMesh: monsterBody,
-        spikes,
-        baseEmissive: 0.4
+        spikes: horns,
+        baseEmissive: 0.0,
+        eyeObjs
       };
 
       scene.add(group);
