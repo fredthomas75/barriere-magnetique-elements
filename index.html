@@ -5481,32 +5481,32 @@
     let pokemonAttacks = []; // projectile-like attack effects
 
     const POKEMON_DEFS = [
-      { name: 'Dracaufeu', type: 'fire', colors: ['#e87030','#f0a040','#ff6020'], wingColor: '#4488cc',
-        arriveFrom: 'sky', size: 28, spawnDelay: 0,
-        targetPos: () => ({ x: centerX, y: (centerY + 20) - houseH * 0.5 }), // roof
+      { name: 'Dracaufeu', type: 'fire', colors: ['#e87030','#f0a040','#cc4a10'], wingColor: '#4488cc',
+        arriveFrom: 'sky', size: 55, spawnDelay: 0,
+        targetPos: () => ({ x: centerX, y: (centerY + 20) - houseH * 0.5 }),
         attackColor: 'rgba(255,120,0,1)', attackName: 'Flamethrower' },
       { name: 'Rayquaza', type: 'dragon', colors: ['#2a8a3a','#40b050','#1a6a2a'], ringColor: '#ffcc00',
-        arriveFrom: 'sky', size: 22, spawnDelay: 15,
+        arriveFrom: 'sky', size: 45, spawnDelay: 15,
         targetPos: () => ({ x: centerX - barrierRadius - 30, y: centerY - 40 }),
         attackColor: 'rgba(0,255,100,1)', attackName: 'Dragon Ascent' },
       { name: 'Kyurem', type: 'ice', colors: ['#7a8a9a','#90a0b0','#5a6a7a'], iceColor: '#80ccff',
-        arriveFrom: 'sky', size: 32, spawnDelay: 30,
+        arriveFrom: 'sky', size: 60, spawnDelay: 30,
         targetPos: () => ({ x: centerX + barrierRadius + 40, y: centerY }),
         attackColor: 'rgba(100,200,255,1)', attackName: 'Glaciate' },
       { name: 'Trioxhydre', type: 'dark', colors: ['#2a2a5a','#3a3a7a','#1a1a4a'], headColor: '#6a4a8a',
-        arriveFrom: 'left', size: 26, spawnDelay: 50,
+        arriveFrom: 'left', size: 50, spawnDelay: 50,
         targetPos: () => ({ x: centerX - barrierRadius - 50, y: centerY + 40 }),
         attackColor: 'rgba(120,50,180,1)', attackName: 'Dark Pulse' },
       { name: 'Fulgulairo', type: 'electric', colors: ['#2a2a2a','#3a3a4a','#1a1a2a'], boltColor: '#ffdd00',
-        arriveFrom: 'sky', size: 18, spawnDelay: 65,
+        arriveFrom: 'sky', size: 40, spawnDelay: 65,
         targetPos: () => ({ x: centerX + barrierRadius + 30, y: centerY - 60 }),
         attackColor: 'rgba(255,220,0,1)', attackName: 'Electro Ball' },
       { name: 'Rugit-Lune', type: 'dragon', colors: ['#1a2a5a','#2a3a6a','#0a1a3a'], wingColor: '#cc3333',
-        arriveFrom: 'sky', size: 30, spawnDelay: 80,
+        arriveFrom: 'sky', size: 55, spawnDelay: 80,
         targetPos: () => ({ x: centerX - barrierRadius - 20, y: centerY + 80 }),
         attackColor: 'rgba(200,50,50,1)', attackName: 'Dragon Claw' },
       { name: 'Genesect', type: 'steel', colors: ['#6a3a8a','#8a5aaa','#4a2a6a'], cannonColor: '#ff4400',
-        arriveFrom: 'right', size: 20, spawnDelay: 100,
+        arriveFrom: 'right', size: 42, spawnDelay: 100,
         targetPos: () => ({ x: centerX + barrierRadius + 50, y: centerY + 60 }),
         attackColor: 'rgba(255,80,0,1)', attackName: 'Techno Blast' }
     ];
@@ -5698,294 +5698,513 @@
         const bobY = Math.sin(p.bobPhase) * 2;
 
         if (p.def.name === 'Dracaufeu') {
-          // Charizard: bipedal dragon, wings, tail flame
+          // CHARIZARD — orange bipedal dragon, blue inner wings, cream belly, tail flame
           ctx.translate(0, bobY);
-          // Wings
+          const fl = Math.sin(t*0.015)*4;
+          const wingBeat = Math.sin(t*0.008)*0.15;
+          // Tail
+          ctx.strokeStyle = c1; ctx.lineWidth = s*0.1; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(-s*0.15, s*0.35);
+          ctx.quadraticCurveTo(-s*0.5, s*0.6, -s*0.55, s*0.75); ctx.stroke();
+          // Tail flame (3 layers)
+          ctx.fillStyle = '#ff2200';
+          ctx.beginPath(); ctx.moveTo(-s*0.55, s*0.65);
+          ctx.quadraticCurveTo(-s*0.7, s*0.5+fl, -s*0.85, s*0.6+fl);
+          ctx.quadraticCurveTo(-s*0.65, s*0.75, -s*0.55, s*0.85+fl*0.5);
+          ctx.quadraticCurveTo(-s*0.45, s*0.75, -s*0.55, s*0.65); ctx.fill();
+          ctx.fillStyle = '#ff8800';
+          ctx.beginPath(); ctx.moveTo(-s*0.55, s*0.68);
+          ctx.quadraticCurveTo(-s*0.65, s*0.55+fl*0.6, -s*0.75, s*0.63+fl*0.6);
+          ctx.quadraticCurveTo(-s*0.6, s*0.73, -s*0.55, s*0.78+fl*0.3);
+          ctx.quadraticCurveTo(-s*0.5, s*0.73, -s*0.55, s*0.68); ctx.fill();
+          ctx.fillStyle = '#ffdd44';
+          ctx.beginPath(); ctx.moveTo(-s*0.55, s*0.7);
+          ctx.quadraticCurveTo(-s*0.62, s*0.6+fl*0.3, -s*0.66, s*0.67+fl*0.3);
+          ctx.quadraticCurveTo(-s*0.58, s*0.72, -s*0.55, s*0.7); ctx.fill();
+          // Wings (behind body) - teal/blue inner membrane
+          ctx.save();
           ctx.fillStyle = p.def.wingColor;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.2, -s*0.3);
-          ctx.quadraticCurveTo(-s*1.0, -s*0.8, -s*1.1, -s*0.1);
-          ctx.lineTo(-s*0.3, -s*0.1);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(s*0.2, -s*0.3);
-          ctx.quadraticCurveTo(s*1.0, -s*0.8, s*1.1, -s*0.1);
-          ctx.lineTo(s*0.3, -s*0.1);
-          ctx.fill();
+          // Left wing
+          ctx.beginPath(); ctx.moveTo(-s*0.25, -s*0.15);
+          ctx.quadraticCurveTo(-s*0.6, -s*0.7-wingBeat*s, -s*1.15, -s*0.4-wingBeat*s);
+          ctx.lineTo(-s*0.9, -s*0.15-wingBeat*s*0.5);
+          ctx.quadraticCurveTo(-s*0.7, s*0.05, -s*0.25, s*0.05); ctx.fill();
+          // Wing fingers
+          ctx.strokeStyle = c3; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(-s*0.4, -s*0.1);
+          ctx.lineTo(-s*0.85, -s*0.5-wingBeat*s); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-s*0.35, -s*0.05);
+          ctx.lineTo(-s*1.0, -s*0.35-wingBeat*s); ctx.stroke();
+          // Right wing
+          ctx.fillStyle = p.def.wingColor;
+          ctx.beginPath(); ctx.moveTo(s*0.25, -s*0.15);
+          ctx.quadraticCurveTo(s*0.6, -s*0.7-wingBeat*s, s*1.15, -s*0.4-wingBeat*s);
+          ctx.lineTo(s*0.9, -s*0.15-wingBeat*s*0.5);
+          ctx.quadraticCurveTo(s*0.7, s*0.05, s*0.25, s*0.05); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.4, -s*0.1);
+          ctx.lineTo(s*0.85, -s*0.5-wingBeat*s); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(s*0.35, -s*0.05);
+          ctx.lineTo(s*1.0, -s*0.35-wingBeat*s); ctx.stroke();
+          ctx.restore();
+          // Legs
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(-s*0.12, s*0.4, s*0.1, s*0.15, -0.1, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.12, s*0.4, s*0.1, s*0.15, 0.1, 0, Math.PI*2); ctx.fill();
+          // Claws
+          ctx.fillStyle = '#ddd';
+          [-1,1].forEach(side => {
+            for (let cl=0;cl<3;cl++) {
+              ctx.beginPath();
+              ctx.moveTo(side*s*(0.05+cl*0.05), s*0.52);
+              ctx.lineTo(side*s*(0.07+cl*0.05), s*0.58);
+              ctx.lineTo(side*s*(0.03+cl*0.05), s*0.55);
+              ctx.fill();
+            }
+          });
           // Body
           ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.4, s*0.5, 0, 0, Math.PI*2);
-          ctx.fill();
+          ctx.beginPath(); ctx.ellipse(0, s*0.05, s*0.32, s*0.4, 0, 0, Math.PI*2); ctx.fill();
+          // Cream belly
+          ctx.fillStyle = '#f5d88a';
+          ctx.beginPath(); ctx.ellipse(0, s*0.12, s*0.2, s*0.28, 0, 0, Math.PI*2); ctx.fill();
+          // Arms
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(-s*0.3, s*0.0, s*0.07, s*0.18, -0.4, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.3, s*0.0, s*0.07, s*0.18, 0.4, 0, Math.PI*2); ctx.fill();
+          // Neck
+          ctx.beginPath(); ctx.ellipse(0, -s*0.3, s*0.15, s*0.15, 0, 0, Math.PI*2); ctx.fill();
           // Head
           ctx.beginPath();
-          ctx.arc(0, -s*0.55, s*0.25, 0, Math.PI*2);
+          ctx.moveTo(-s*0.2, -s*0.35);
+          ctx.quadraticCurveTo(-s*0.25, -s*0.6, 0, -s*0.65);
+          ctx.quadraticCurveTo(s*0.25, -s*0.6, s*0.2, -s*0.35);
+          ctx.quadraticCurveTo(s*0.18, -s*0.25, 0, -s*0.22);
+          ctx.quadraticCurveTo(-s*0.18, -s*0.25, -s*0.2, -s*0.35);
           ctx.fill();
-          // Belly
-          ctx.fillStyle = '#f0c870';
-          ctx.beginPath();
-          ctx.ellipse(0, s*0.1, s*0.25, s*0.3, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Eyes
+          // Snout
+          ctx.fillStyle = c2;
+          ctx.beginPath(); ctx.ellipse(0, -s*0.35, s*0.12, s*0.06, 0, 0, Math.PI*2); ctx.fill();
+          // Eyes — fierce, white sclera + narrow pupil
           ctx.fillStyle = '#fff';
-          ctx.beginPath(); ctx.arc(-s*0.1, -s*0.58, s*0.06, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(s*0.1, -s*0.58, s*0.06, 0, Math.PI*2); ctx.fill();
-          ctx.fillStyle = '#222';
-          ctx.beginPath(); ctx.arc(-s*0.08, -s*0.58, s*0.03, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(s*0.12, -s*0.58, s*0.03, 0, Math.PI*2); ctx.fill();
-          // Horns
+          ctx.beginPath(); ctx.ellipse(-s*0.1, -s*0.48, s*0.07, s*0.05, -0.1, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.1, -s*0.48, s*0.07, s*0.05, 0.1, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#1a5a8a';
+          ctx.beginPath(); ctx.ellipse(-s*0.09, -s*0.48, s*0.035, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.11, -s*0.48, s*0.035, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-s*0.085, -s*0.48, s*0.015, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.115, -s*0.48, s*0.015, 0, Math.PI*2); ctx.fill();
+          // Two horns on back of head
           ctx.fillStyle = c3;
-          ctx.beginPath(); ctx.moveTo(-s*0.15, -s*0.75); ctx.lineTo(-s*0.25, -s*0.95); ctx.lineTo(-s*0.05, -s*0.78); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(s*0.15, -s*0.75); ctx.lineTo(s*0.25, -s*0.95); ctx.lineTo(s*0.05, -s*0.78); ctx.fill();
-          // Tail flame
-          ctx.fillStyle = '#ff4400';
-          const flicker = Math.sin(t*0.02)*3;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.1, s*0.5);
-          ctx.quadraticCurveTo(-s*0.5, s*0.8+flicker, -s*0.3, s*1.0+flicker);
-          ctx.quadraticCurveTo(-s*0.15, s*0.7, -s*0.1, s*0.5);
-          ctx.fill();
-          ctx.fillStyle = '#ffcc00';
-          ctx.beginPath();
-          ctx.moveTo(-s*0.1, s*0.5);
-          ctx.quadraticCurveTo(-s*0.35, s*0.7+flicker*0.5, -s*0.25, s*0.85+flicker*0.5);
-          ctx.quadraticCurveTo(-s*0.15, s*0.65, -s*0.1, s*0.5);
-          ctx.fill();
+          ctx.beginPath(); ctx.moveTo(-s*0.12, -s*0.6); ctx.lineTo(-s*0.22, -s*0.85); ctx.lineTo(-s*0.05, -s*0.62); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.12, -s*0.6); ctx.lineTo(s*0.22, -s*0.85); ctx.lineTo(s*0.05, -s*0.62); ctx.fill();
+          // Nostrils
+          ctx.fillStyle = '#333';
+          ctx.beginPath(); ctx.arc(-s*0.04, -s*0.34, s*0.015, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.04, -s*0.34, s*0.015, 0, Math.PI*2); ctx.fill();
 
         } else if (p.def.name === 'Rayquaza') {
-          // Serpentine dragon, green with yellow rings
+          // RAYQUAZA — long serpentine green dragon, yellow ring markings, red fins
           ctx.translate(0, bobY);
-          const segs = 10;
-          for (let i = 0; i < segs; i++) {
+          const segs = 16;
+          const headOff = Math.sin(t*0.004)*s*0.15;
+          // Draw body from tail to head
+          for (let i = segs-1; i >= 0; i--) {
             const seg = i / segs;
-            const sx = Math.sin(seg*Math.PI*3 + t*0.005)*s*0.3;
-            const sy = seg*s*1.5 - s*0.5;
-            const sr = s*(0.2 - seg*0.01);
-            ctx.beginPath();
-            ctx.arc(sx, sy, Math.max(1,sr), 0, Math.PI*2);
-            ctx.fillStyle = i%3===0 ? p.def.ringColor : c1;
+            const sx = Math.sin(seg*Math.PI*4 + t*0.005)*s*0.25;
+            const sy = seg*s*2.0 - s*0.6;
+            const sr = Math.max(2, s*(0.18 - seg*0.006));
+            // Side fins every 4 segments
+            if (i%4===0 && i > 0 && i < segs-1) {
+              ctx.fillStyle = '#cc3300';
+              ctx.beginPath();
+              ctx.moveTo(sx-sr, sy); ctx.lineTo(sx-sr*2.5, sy-sr); ctx.lineTo(sx-sr, sy+sr*0.3); ctx.fill();
+              ctx.beginPath();
+              ctx.moveTo(sx+sr, sy); ctx.lineTo(sx+sr*2.5, sy-sr); ctx.lineTo(sx+sr, sy+sr*0.3); ctx.fill();
+            }
+            // Body segment
+            ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI*2);
+            if (i%4===0) { ctx.fillStyle = p.def.ringColor; } // yellow ring
+            else { ctx.fillStyle = c1; }
             ctx.fill();
+            ctx.strokeStyle = c3; ctx.lineWidth = 0.8;
+            ctx.stroke();
+            // Dark stripe on top
+            ctx.fillStyle = c3;
+            ctx.beginPath(); ctx.arc(sx, sy-sr*0.3, sr*0.4, 0, Math.PI*2); ctx.fill();
           }
-          // Head
+          // Head (larger)
+          const hx2 = headOff;
           ctx.fillStyle = c1;
           ctx.beginPath();
-          ctx.arc(Math.sin(t*0.005)*s*0.3, -s*0.5, s*0.3, 0, Math.PI*2);
+          ctx.moveTo(hx2-s*0.2, -s*0.5);
+          ctx.quadraticCurveTo(hx2-s*0.25, -s*0.75, hx2, -s*0.8);
+          ctx.quadraticCurveTo(hx2+s*0.25, -s*0.75, hx2+s*0.2, -s*0.5);
+          ctx.quadraticCurveTo(hx2+s*0.15, -s*0.4, hx2, -s*0.38);
+          ctx.quadraticCurveTo(hx2-s*0.15, -s*0.4, hx2-s*0.2, -s*0.5);
           ctx.fill();
-          // Eyes (red)
-          ctx.fillStyle = '#ff2200';
-          ctx.beginPath(); ctx.arc(Math.sin(t*0.005)*s*0.3 - s*0.1, -s*0.55, s*0.06, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(Math.sin(t*0.005)*s*0.3 + s*0.1, -s*0.55, s*0.06, 0, Math.PI*2); ctx.fill();
-          // Fins
-          ctx.fillStyle = '#cc3300';
+          // Yellow jaw
+          ctx.fillStyle = p.def.ringColor;
           ctx.beginPath();
-          ctx.moveTo(Math.sin(t*0.005)*s*0.3, -s*0.75);
-          ctx.lineTo(Math.sin(t*0.005)*s*0.3 - s*0.15, -s*1.0);
-          ctx.lineTo(Math.sin(t*0.005)*s*0.3 + s*0.15, -s*1.0);
-          ctx.fill();
+          ctx.ellipse(hx2, -s*0.45, s*0.12, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          // Red eyes
+          ctx.fillStyle = '#ff1100';
+          ctx.beginPath(); ctx.ellipse(hx2-s*0.09, -s*0.62, s*0.05, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(hx2+s*0.09, -s*0.62, s*0.05, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(hx2-s*0.085, -s*0.62, s*0.02, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(hx2+s*0.095, -s*0.62, s*0.02, 0, Math.PI*2); ctx.fill();
+          // Head fins (V shape, red-tipped)
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.moveTo(hx2-s*0.1, -s*0.75); ctx.lineTo(hx2-s*0.2, -s*1.1); ctx.lineTo(hx2-s*0.03, -s*0.78); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(hx2+s*0.1, -s*0.75); ctx.lineTo(hx2+s*0.2, -s*1.1); ctx.lineTo(hx2+s*0.03, -s*0.78); ctx.fill();
+          ctx.fillStyle = '#cc3300';
+          ctx.beginPath(); ctx.moveTo(hx2-s*0.17, -s*1.0); ctx.lineTo(hx2-s*0.2, -s*1.1); ctx.lineTo(hx2-s*0.12, -s*0.95); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(hx2+s*0.17, -s*1.0); ctx.lineTo(hx2+s*0.2, -s*1.1); ctx.lineTo(hx2+s*0.12, -s*0.95); ctx.fill();
 
         } else if (p.def.name === 'Kyurem') {
-          // Massive ice dragon
+          // KYUREM — massive gray ice dragon, jagged ice wings, frozen jaw, yellow crest
           ctx.translate(0, bobY);
-          // Body
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.5, s*0.6, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Ice wings
+          // Ice wings (jagged crystalline)
+          ctx.save(); ctx.globalAlpha = 0.75;
           ctx.fillStyle = p.def.iceColor;
-          ctx.globalAlpha = 0.7;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.3, -s*0.2);
-          ctx.lineTo(-s*1.2, -s*0.5);
-          ctx.lineTo(-s*1.0, s*0.1);
-          ctx.lineTo(-s*0.3, 0);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(s*0.3, -s*0.2);
-          ctx.lineTo(s*1.2, -s*0.5);
-          ctx.lineTo(s*1.0, s*0.1);
-          ctx.lineTo(s*0.3, 0);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-          // Head
-          ctx.fillStyle = p.def.iceColor;
-          ctx.beginPath();
-          ctx.arc(0, -s*0.55, s*0.28, 0, Math.PI*2);
-          ctx.fill();
-          // Yellow eyes
-          ctx.fillStyle = '#ffcc00';
-          ctx.beginPath(); ctx.arc(-s*0.1, -s*0.58, s*0.07, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(s*0.1, -s*0.58, s*0.07, 0, Math.PI*2); ctx.fill();
-          // Ice crest
+          // Left ice wing
+          ctx.beginPath(); ctx.moveTo(-s*0.35, -s*0.15);
+          ctx.lineTo(-s*0.7, -s*0.5); ctx.lineTo(-s*0.9, -s*0.65);
+          ctx.lineTo(-s*1.15, -s*0.4); ctx.lineTo(-s*1.0, -s*0.15);
+          ctx.lineTo(-s*0.8, s*0.05); ctx.lineTo(-s*0.35, s*0.05); ctx.fill();
+          // Right ice wing
+          ctx.beginPath(); ctx.moveTo(s*0.35, -s*0.15);
+          ctx.lineTo(s*0.7, -s*0.5); ctx.lineTo(s*0.9, -s*0.65);
+          ctx.lineTo(s*1.15, -s*0.4); ctx.lineTo(s*1.0, -s*0.15);
+          ctx.lineTo(s*0.8, s*0.05); ctx.lineTo(s*0.35, s*0.05); ctx.fill();
+          // Ice crystals on wings
           ctx.fillStyle = '#aaddff';
+          [-1,1].forEach(side => {
+            ctx.beginPath(); ctx.moveTo(side*s*0.8, -s*0.35);
+            ctx.lineTo(side*s*0.85, -s*0.55); ctx.lineTo(side*s*0.9, -s*0.3); ctx.fill();
+          });
+          ctx.restore();
+          // Legs
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(-s*0.2, s*0.4, s*0.12, s*0.2, -0.1, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.2, s*0.4, s*0.12, s*0.2, 0.1, 0, Math.PI*2); ctx.fill();
+          // Body — bulky
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(0, s*0.05, s*0.4, s*0.45, 0, 0, Math.PI*2); ctx.fill();
+          // Ice patches on body
+          ctx.fillStyle = p.def.iceColor; ctx.globalAlpha = 0.4;
+          ctx.beginPath(); ctx.ellipse(-s*0.15, s*0.1, s*0.12, s*0.2, -0.2, 0, Math.PI*2); ctx.fill();
+          ctx.globalAlpha = 1;
+          // Neck + Head
+          ctx.fillStyle = c2;
+          ctx.beginPath(); ctx.ellipse(0, -s*0.35, s*0.2, s*0.2, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = p.def.iceColor;
           ctx.beginPath();
-          ctx.moveTo(0, -s*0.8); ctx.lineTo(-s*0.15, -s*1.1); ctx.lineTo(s*0.15, -s*1.1);
-          ctx.fill();
+          ctx.moveTo(-s*0.18, -s*0.4);
+          ctx.quadraticCurveTo(-s*0.22, -s*0.6, 0, -s*0.68);
+          ctx.quadraticCurveTo(s*0.22, -s*0.6, s*0.18, -s*0.4);
+          ctx.quadraticCurveTo(0, -s*0.32, -s*0.18, -s*0.4); ctx.fill();
+          // Yellow crest/horn
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath(); ctx.moveTo(-s*0.05, -s*0.65);
+          ctx.lineTo(0, -s*0.95); ctx.lineTo(s*0.05, -s*0.65); ctx.fill();
+          // Frozen jaw (broken ice effect)
+          ctx.fillStyle = '#aaddff';
+          ctx.beginPath(); ctx.moveTo(-s*0.1, -s*0.38);
+          ctx.lineTo(-s*0.15, -s*0.28); ctx.lineTo(-s*0.05, -s*0.3);
+          ctx.lineTo(s*0.05, -s*0.28); ctx.lineTo(s*0.15, -s*0.3);
+          ctx.lineTo(s*0.1, -s*0.38); ctx.fill();
+          // Eyes — yellow, glowing
+          ctx.fillStyle = '#ffcc00';
+          ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 8;
+          ctx.beginPath(); ctx.ellipse(-s*0.08, -s*0.52, s*0.05, s*0.035, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.08, -s*0.52, s*0.05, s*0.035, 0, 0, Math.PI*2); ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-s*0.075, -s*0.52, s*0.02, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.085, -s*0.52, s*0.02, 0, Math.PI*2); ctx.fill();
+          // Ice mist aura
+          ctx.save(); ctx.globalAlpha = 0.15;
+          const mistGrad = ctx.createRadialGradient(0, 0, s*0.2, 0, 0, s*0.8);
+          mistGrad.addColorStop(0, '#80ccff'); mistGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = mistGrad;
+          ctx.fillRect(-s*0.8, -s*0.8, s*1.6, s*1.6);
+          ctx.restore();
 
         } else if (p.def.name === 'Trioxhydre') {
-          // 3-headed dark dragon, levitating
+          // HYDREIGON — dark 3-headed dragon, 6 black wings, levitates, purple accents
           ctx.translate(0, bobY);
-          // Body
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.35, s*0.45, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Wings (6 small)
+          // 6 small ragged wings (3 per side)
           ctx.fillStyle = c3;
           for (let w = 0; w < 3; w++) {
-            const wa = -0.8 + w*0.4;
-            ctx.beginPath();
-            ctx.moveTo(-s*0.3, -s*0.1 + w*s*0.1);
-            ctx.lineTo(-s*0.8, -s*0.3 + w*s*0.1);
-            ctx.lineTo(-s*0.5, s*0.05 + w*s*0.1);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(s*0.3, -s*0.1 + w*s*0.1);
-            ctx.lineTo(s*0.8, -s*0.3 + w*s*0.1);
-            ctx.lineTo(s*0.5, s*0.05 + w*s*0.1);
-            ctx.fill();
+            const wy = -s*0.15 + w*s*0.15;
+            // Left
+            ctx.beginPath(); ctx.moveTo(-s*0.3, wy);
+            ctx.lineTo(-s*0.7-w*s*0.05, wy-s*0.18);
+            ctx.lineTo(-s*0.65-w*s*0.03, wy+s*0.05);
+            ctx.lineTo(-s*0.5, wy+s*0.08); ctx.fill();
+            // Right
+            ctx.beginPath(); ctx.moveTo(s*0.3, wy);
+            ctx.lineTo(s*0.7+w*s*0.05, wy-s*0.18);
+            ctx.lineTo(s*0.65+w*s*0.03, wy+s*0.05);
+            ctx.lineTo(s*0.5, wy+s*0.08); ctx.fill();
           }
-          // 3 heads
-          const heads = [[-s*0.35, -s*0.5], [0, -s*0.65], [s*0.35, -s*0.5]];
-          heads.forEach(([hx, hy]) => {
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(0, s*0.05, s*0.3, s*0.4, 0, 0, Math.PI*2); ctx.fill();
+          // Purple belly stripes
+          ctx.fillStyle = '#5a3a7a';
+          ctx.fillRect(-s*0.15, -s*0.05, s*0.3, s*0.04);
+          ctx.fillRect(-s*0.12, s*0.08, s*0.24, s*0.04);
+          // Arm-heads (side heads on "hands")
+          const armHeads = [[-s*0.4, -s*0.25], [s*0.4, -s*0.25]];
+          armHeads.forEach(([ax, ay]) => {
+            // Arm neck
+            ctx.strokeStyle = c1; ctx.lineWidth = s*0.08;
+            ctx.beginPath(); ctx.moveTo(ax*0.6, s*0.0); ctx.quadraticCurveTo(ax*0.8, ay+s*0.1, ax, ay); ctx.stroke();
+            // Arm head
             ctx.fillStyle = c2;
-            ctx.beginPath(); ctx.arc(hx, hy, s*0.18, 0, Math.PI*2); ctx.fill();
-            // Red eye markings
-            ctx.fillStyle = '#cc2244';
-            ctx.beginPath(); ctx.arc(hx, hy - s*0.03, s*0.06, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ax, ay, s*0.14, 0, Math.PI*2); ctx.fill();
+            // Fuchsia eye marks
+            ctx.fillStyle = '#cc2266';
+            ctx.beginPath(); ctx.arc(ax, ay-s*0.02, s*0.05, 0, Math.PI*2); ctx.fill();
+            // Jaw
+            ctx.fillStyle = c1;
+            ctx.beginPath(); ctx.ellipse(ax, ay+s*0.08, s*0.1, s*0.04, 0, 0, Math.PI*2); ctx.fill();
           });
-          // Purple crest on main head
-          ctx.fillStyle = p.def.headColor;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.1, -s*0.8); ctx.lineTo(0, -s*1.0); ctx.lineTo(s*0.1, -s*0.8);
-          ctx.fill();
-
-        } else if (p.def.name === 'Fulgulairo') {
-          // Electric seabird
-          ctx.translate(0, bobY * 1.5);
-          // Wings spread
-          const wingFlap = Math.sin(t*0.008)*0.2;
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.quadraticCurveTo(-s*0.6, -s*0.5 + wingFlap*s, -s*1.2, -s*0.3 + wingFlap*s);
-          ctx.lineTo(-s*0.8, s*0.1);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.quadraticCurveTo(s*0.6, -s*0.5 + wingFlap*s, s*1.2, -s*0.3 + wingFlap*s);
-          ctx.lineTo(s*0.8, s*0.1);
-          ctx.fill();
-          // Yellow wing tips
-          ctx.fillStyle = p.def.boltColor;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.9, -s*0.2 + wingFlap*s); ctx.lineTo(-s*1.2, -s*0.3 + wingFlap*s); ctx.lineTo(-s*0.8, s*0.1);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(s*0.9, -s*0.2 + wingFlap*s); ctx.lineTo(s*1.2, -s*0.3 + wingFlap*s); ctx.lineTo(s*0.8, s*0.1);
-          ctx.fill();
-          // Body
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.2, s*0.35, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Head
-          ctx.beginPath(); ctx.arc(0, -s*0.35, s*0.15, 0, Math.PI*2); ctx.fill();
-          // Yellow throat
-          ctx.fillStyle = p.def.boltColor;
-          ctx.beginPath(); ctx.ellipse(0, -s*0.2, s*0.08, s*0.12, 0, 0, Math.PI*2); ctx.fill();
-          // Beak
-          ctx.fillStyle = '#cc8800';
-          ctx.beginPath(); ctx.moveTo(0, -s*0.42); ctx.lineTo(s*0.05, -s*0.55); ctx.lineTo(-s*0.05, -s*0.42); ctx.fill();
-
-        } else if (p.def.name === 'Rugit-Lune') {
-          // Roaring Moon - quadrupedal dragon with crescent wings
-          ctx.translate(0, bobY);
-          // Crescent wings
-          ctx.fillStyle = p.def.wingColor;
-          ctx.beginPath();
-          ctx.moveTo(-s*0.3, -s*0.1);
-          ctx.quadraticCurveTo(-s*1.0, -s*0.9, -s*0.5, -s*0.1);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(s*0.3, -s*0.1);
-          ctx.quadraticCurveTo(s*1.0, -s*0.9, s*0.5, -s*0.1);
-          ctx.fill();
-          // Body
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.45, s*0.35, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Red underside
-          ctx.fillStyle = '#cc3333';
-          ctx.beginPath();
-          ctx.ellipse(0, s*0.1, s*0.3, s*0.2, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Head with spikes
-          ctx.fillStyle = c1;
-          ctx.beginPath(); ctx.arc(0, -s*0.4, s*0.22, 0, Math.PI*2); ctx.fill();
-          // Light blue head spikes
-          ctx.fillStyle = '#6699cc';
-          for (let sp = 0; sp < 3; sp++) {
-            ctx.beginPath();
-            ctx.moveTo(-s*0.1 + sp*s*0.1, -s*0.55);
-            ctx.lineTo(-s*0.05 + sp*s*0.1, -s*0.8);
-            ctx.lineTo(sp*s*0.1, -s*0.55);
-            ctx.fill();
-          }
-          // Eyes
-          ctx.fillStyle = '#ffcc00';
-          ctx.beginPath(); ctx.arc(-s*0.08, -s*0.43, s*0.05, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(s*0.08, -s*0.43, s*0.05, 0, Math.PI*2); ctx.fill();
-          // Tail
-          ctx.strokeStyle = c1;
-          ctx.lineWidth = s*0.08;
-          ctx.beginPath();
-          ctx.moveTo(0, s*0.3);
-          ctx.quadraticCurveTo(s*0.3, s*0.7, s*0.1, s*0.9);
-          ctx.stroke();
-          ctx.fillStyle = '#cc3333';
-          ctx.beginPath(); ctx.arc(s*0.1, s*0.9, s*0.06, 0, Math.PI*2); ctx.fill();
-
-        } else if (p.def.name === 'Genesect') {
-          // Bug/Steel mech insect with cannon
-          ctx.translate(0, bobY);
-          // Saucer-shaped head
-          ctx.fillStyle = c1;
-          ctx.beginPath();
-          ctx.ellipse(0, -s*0.3, s*0.35, s*0.15, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Body
+          // Main head
           ctx.fillStyle = c2;
           ctx.beginPath();
-          ctx.ellipse(0, 0, s*0.25, s*0.4, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Steel plating
-          ctx.strokeStyle = '#999';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.ellipse(0, -s*0.05, s*0.2, s*0.3, 0, 0, Math.PI*2);
-          ctx.stroke();
-          // Red eyes
-          ctx.fillStyle = '#ff0000';
-          ctx.beginPath(); ctx.arc(-s*0.12, -s*0.32, s*0.05, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(s*0.12, -s*0.32, s*0.05, 0, Math.PI*2); ctx.fill();
-          // Back cannon
+          ctx.moveTo(-s*0.18, -s*0.4);
+          ctx.quadraticCurveTo(-s*0.22, -s*0.65, 0, -s*0.72);
+          ctx.quadraticCurveTo(s*0.22, -s*0.65, s*0.18, -s*0.4);
+          ctx.quadraticCurveTo(0, -s*0.3, -s*0.18, -s*0.4); ctx.fill();
+          // Purple frill/crest
+          ctx.fillStyle = p.def.headColor;
+          for (let f=0;f<5;f++) {
+            const fa = -0.6 + f*0.3;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(fa)*s*0.15, -s*0.65+Math.sin(fa)*s*0.05);
+            ctx.lineTo(Math.cos(fa)*s*0.22, -s*0.9);
+            ctx.lineTo(Math.cos(fa+0.15)*s*0.15, -s*0.65+Math.sin(fa+0.15)*s*0.05);
+            ctx.fill();
+          }
+          // Main eyes — menacing red
+          ctx.fillStyle = '#cc2244';
+          ctx.beginPath(); ctx.ellipse(-s*0.07, -s*0.55, s*0.05, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.07, -s*0.55, s*0.05, s*0.04, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-s*0.065, -s*0.55, s*0.02, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.075, -s*0.55, s*0.02, 0, Math.PI*2); ctx.fill();
+
+        } else if (p.def.name === 'Fulgulairo') {
+          // KILOWATTREL — black seabird, yellow electric accents, long wingspan
+          ctx.translate(0, bobY * 1.5);
+          const wFlap = Math.sin(t*0.007)*0.25;
+          // Wings — long, angular like a frigatebird
+          // Left wing
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.moveTo(-s*0.1, -s*0.05);
+          ctx.quadraticCurveTo(-s*0.5, -s*0.45-wFlap*s, -s*1.3, -s*0.2-wFlap*s);
+          ctx.lineTo(-s*1.1, -s*0.05-wFlap*s*0.5);
+          ctx.quadraticCurveTo(-s*0.6, s*0.1, -s*0.1, s*0.05); ctx.fill();
+          // Right wing
+          ctx.beginPath(); ctx.moveTo(s*0.1, -s*0.05);
+          ctx.quadraticCurveTo(s*0.5, -s*0.45-wFlap*s, s*1.3, -s*0.2-wFlap*s);
+          ctx.lineTo(s*1.1, -s*0.05-wFlap*s*0.5);
+          ctx.quadraticCurveTo(s*0.6, s*0.1, s*0.1, s*0.05); ctx.fill();
+          // Yellow lightning pattern on wings
+          ctx.fillStyle = p.def.boltColor;
+          ctx.beginPath(); ctx.moveTo(-s*0.7, -s*0.2-wFlap*s*0.7);
+          ctx.lineTo(-s*0.8, -s*0.15-wFlap*s*0.6); ctx.lineTo(-s*1.2, -s*0.15-wFlap*s*0.8);
+          ctx.lineTo(-s*1.1, -s*0.05-wFlap*s*0.5); ctx.lineTo(-s*0.8, -s*0.05-wFlap*s*0.4); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.7, -s*0.2-wFlap*s*0.7);
+          ctx.lineTo(s*0.8, -s*0.15-wFlap*s*0.6); ctx.lineTo(s*1.2, -s*0.15-wFlap*s*0.8);
+          ctx.lineTo(s*1.1, -s*0.05-wFlap*s*0.5); ctx.lineTo(s*0.8, -s*0.05-wFlap*s*0.4); ctx.fill();
+          // Body — sleek
+          ctx.fillStyle = '#3a3a4a';
+          ctx.beginPath(); ctx.ellipse(0, 0, s*0.18, s*0.32, 0, 0, Math.PI*2); ctx.fill();
+          // Yellow throat sac (electric storage)
+          ctx.fillStyle = p.def.boltColor;
+          ctx.beginPath(); ctx.ellipse(0, -s*0.12, s*0.1, s*0.13, 0, 0, Math.PI*2); ctx.fill();
+          // Head
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.arc(0, -s*0.32, s*0.14, 0, Math.PI*2); ctx.fill();
+          // Yellow eye accents
+          ctx.fillStyle = p.def.boltColor;
+          ctx.beginPath(); ctx.ellipse(-s*0.06, -s*0.35, s*0.04, s*0.025, -0.2, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.06, -s*0.35, s*0.04, s*0.025, 0.2, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-s*0.055, -s*0.35, s*0.015, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.065, -s*0.35, s*0.015, 0, Math.PI*2); ctx.fill();
+          // Long hooked beak
+          ctx.fillStyle = '#aa7700';
+          ctx.beginPath(); ctx.moveTo(0, -s*0.4); ctx.lineTo(s*0.03, -s*0.56);
+          ctx.quadraticCurveTo(s*0.01, -s*0.58, -s*0.01, -s*0.55); ctx.lineTo(-s*0.03, -s*0.4); ctx.fill();
+          // Tail feathers
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.moveTo(-s*0.05, s*0.3); ctx.lineTo(0, s*0.55);
+          ctx.lineTo(s*0.05, s*0.3); ctx.fill();
+          // Electric sparks around
+          if (Math.random()<0.4) {
+            ctx.strokeStyle = p.def.boltColor; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6;
+            const sx2=s*(Math.random()-0.5)*1.5, sy2=-s*0.2+s*(Math.random()-0.5)*0.6;
+            ctx.beginPath(); ctx.moveTo(sx2,sy2); ctx.lineTo(sx2+s*0.1,sy2-s*0.08);
+            ctx.lineTo(sx2+s*0.05,sy2-s*0.15); ctx.stroke(); ctx.globalAlpha=1;
+          }
+
+        } else if (p.def.name === 'Rugit-Lune') {
+          // ROARING MOON — ancient Mega Salamence, dark blue, red underside, crescent wings, jagged
+          ctx.translate(0, bobY);
+          // Crescent moon-shaped wings (feathered, red)
+          ctx.fillStyle = p.def.wingColor;
+          // Left crescent
+          ctx.beginPath(); ctx.moveTo(-s*0.3, -s*0.05);
+          ctx.quadraticCurveTo(-s*0.6, -s*0.7, -s*1.1, -s*0.5);
+          ctx.quadraticCurveTo(-s*0.9, -s*0.2, -s*1.0, s*0.1);
+          ctx.quadraticCurveTo(-s*0.7, -s*0.1, -s*0.3, s*0.05); ctx.fill();
+          // Right crescent
+          ctx.beginPath(); ctx.moveTo(s*0.3, -s*0.05);
+          ctx.quadraticCurveTo(s*0.6, -s*0.7, s*1.1, -s*0.5);
+          ctx.quadraticCurveTo(s*0.9, -s*0.2, s*1.0, s*0.1);
+          ctx.quadraticCurveTo(s*0.7, -s*0.1, s*0.3, s*0.05); ctx.fill();
+          // Feather lines
+          ctx.strokeStyle = '#992222'; ctx.lineWidth = 1;
+          [-1,1].forEach(side => {
+            for (let f=0;f<4;f++) {
+              ctx.beginPath();
+              ctx.moveTo(side*s*(0.4+f*0.15), -s*(0.3-f*0.08));
+              ctx.lineTo(side*s*(0.5+f*0.15), -s*(0.45-f*0.05));
+              ctx.stroke();
+            }
+          });
+          // Body — bulky quadrupedal
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(0, s*0.05, s*0.4, s*0.3, 0, 0, Math.PI*2); ctx.fill();
+          // Red underside + yellow markings
+          ctx.fillStyle = '#cc3333';
+          ctx.beginPath(); ctx.ellipse(0, s*0.15, s*0.28, s*0.18, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#ddaa33';
+          ctx.beginPath(); ctx.ellipse(-s*0.1, s*0.12, s*0.04, s*0.06, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.1, s*0.12, s*0.04, s*0.06, 0, 0, Math.PI*2); ctx.fill();
+          // Front legs (powerful)
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(-s*0.25, s*0.35, s*0.1, s*0.18, -0.15, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.25, s*0.35, s*0.1, s*0.18, 0.15, 0, Math.PI*2); ctx.fill();
+          // Claws
           ctx.fillStyle = '#888';
-          ctx.fillRect(-s*0.06, -s*0.6, s*0.12, s*0.25);
-          // Cannon tip glow
-          ctx.fillStyle = p.def.cannonColor;
-          ctx.beginPath(); ctx.arc(0, -s*0.6, s*0.08, 0, Math.PI*2); ctx.fill();
+          [-1,1].forEach(side => {
+            for (let cl=0;cl<3;cl++) {
+              ctx.beginPath(); ctx.moveTo(side*s*(0.2+cl*0.04), s*0.5);
+              ctx.lineTo(side*s*(0.21+cl*0.04), s*0.56); ctx.lineTo(side*s*(0.19+cl*0.04), s*0.53); ctx.fill();
+            }
+          });
+          // Tail — long, tapering with red tip
+          ctx.strokeStyle = c1; ctx.lineWidth = s*0.08; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(0, s*0.3);
+          ctx.quadraticCurveTo(s*0.2, s*0.6, s*0.35, s*0.85); ctx.stroke();
+          ctx.fillStyle = '#cc3333';
+          ctx.beginPath(); ctx.arc(s*0.35, s*0.85, s*0.05, 0, Math.PI*2); ctx.fill();
+          // Head — angular with white ridges
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.2, -s*0.25);
+          ctx.quadraticCurveTo(-s*0.22, -s*0.5, 0, -s*0.55);
+          ctx.quadraticCurveTo(s*0.22, -s*0.5, s*0.2, -s*0.25);
+          ctx.quadraticCurveTo(0, -s*0.18, -s*0.2, -s*0.25); ctx.fill();
+          // White ridges above eyes
+          ctx.fillStyle = '#ddeeff';
+          ctx.beginPath(); ctx.moveTo(-s*0.15, -s*0.42); ctx.lineTo(-s*0.2, -s*0.5);
+          ctx.lineTo(-s*0.1, -s*0.45); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.15, -s*0.42); ctx.lineTo(s*0.2, -s*0.5);
+          ctx.lineTo(s*0.1, -s*0.45); ctx.fill();
+          // Light blue jagged head spikes
+          ctx.fillStyle = '#6699cc';
+          for (let sp=0;sp<5;sp++) {
+            ctx.beginPath();
+            ctx.moveTo(-s*0.12+sp*s*0.06, -s*0.5);
+            ctx.lineTo(-s*0.09+sp*s*0.06, -s*0.7-sp*s*0.02);
+            ctx.lineTo(-s*0.06+sp*s*0.06, -s*0.5); ctx.fill();
+          }
+          // Eyes — fierce yellow
           ctx.fillStyle = '#ffcc00';
-          ctx.beginPath(); ctx.arc(0, -s*0.6, s*0.04, 0, Math.PI*2); ctx.fill();
-          // Legs
-          ctx.strokeStyle = c1;
-          ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.moveTo(-s*0.15, s*0.3); ctx.lineTo(-s*0.3, s*0.6); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(s*0.15, s*0.3); ctx.lineTo(s*0.3, s*0.6); ctx.stroke();
+          ctx.beginPath(); ctx.ellipse(-s*0.08, -s*0.38, s*0.045, s*0.035, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.08, -s*0.38, s*0.045, s*0.035, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-s*0.075, -s*0.38, s*0.018, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.085, -s*0.38, s*0.018, 0, Math.PI*2); ctx.fill();
+          // Open mouth showing teeth
+          ctx.fillStyle = '#881122';
+          ctx.beginPath(); ctx.ellipse(0, -s*0.26, s*0.08, s*0.03, 0, 0, Math.PI*2); ctx.fill();
+
+        } else if (p.def.name === 'Genesect') {
+          // GENESECT — metallic purple insectoid, saucer head, back cannon, segmented armor
+          ctx.translate(0, bobY);
+          // Back cannon
+          ctx.fillStyle = '#777';
+          ctx.beginPath(); ctx.moveTo(-s*0.05, -s*0.5);
+          ctx.lineTo(-s*0.08, -s*0.75); ctx.lineTo(s*0.08, -s*0.75);
+          ctx.lineTo(s*0.05, -s*0.5); ctx.fill();
+          ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+          ctx.strokeRect(-s*0.08, -s*0.75, s*0.16, s*0.25);
+          // Cannon tip glow
+          ctx.save();
+          ctx.shadowColor = p.def.cannonColor; ctx.shadowBlur = 12;
+          ctx.fillStyle = p.def.cannonColor;
+          ctx.beginPath(); ctx.arc(0, -s*0.75, s*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath(); ctx.arc(0, -s*0.75, s*0.035, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          // Legs (segmented, insectoid)
+          ctx.strokeStyle = c1; ctx.lineWidth = s*0.05; ctx.lineCap = 'round';
+          // Back legs
+          ctx.beginPath(); ctx.moveTo(-s*0.15, s*0.25);
+          ctx.lineTo(-s*0.3, s*0.45); ctx.lineTo(-s*0.25, s*0.65); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(s*0.15, s*0.25);
+          ctx.lineTo(s*0.3, s*0.45); ctx.lineTo(s*0.25, s*0.65); ctx.stroke();
+          // Clawed feet
+          ctx.fillStyle = c3;
+          ctx.beginPath(); ctx.moveTo(-s*0.3, s*0.63); ctx.lineTo(-s*0.35, s*0.7);
+          ctx.lineTo(-s*0.2, s*0.67); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.3, s*0.63); ctx.lineTo(s*0.35, s*0.7);
+          ctx.lineTo(s*0.2, s*0.67); ctx.fill();
+          // Body — segmented thorax/abdomen
+          ctx.fillStyle = c2;
+          ctx.beginPath(); ctx.ellipse(0, s*0.1, s*0.22, s*0.35, 0, 0, Math.PI*2); ctx.fill();
+          // Armor segments
+          ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
+          for (let seg=0;seg<4;seg++) {
+            ctx.beginPath();
+            ctx.ellipse(0, -s*0.1+seg*s*0.12, s*0.2, s*0.02, 0, 0, Math.PI*2);
+            ctx.stroke();
+          }
+          // Steel chest plate
+          ctx.fillStyle = '#999';
+          ctx.beginPath(); ctx.ellipse(0, s*0.0, s*0.15, s*0.12, 0, 0, Math.PI*2); ctx.fill();
+          // Arms (clawed)
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(-s*0.28, -s*0.05, s*0.06, s*0.15, -0.3, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.28, -s*0.05, s*0.06, s*0.15, 0.3, 0, Math.PI*2); ctx.fill();
+          // Saucer-shaped head
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.ellipse(0, -s*0.32, s*0.3, s*0.12, 0, 0, Math.PI*2); ctx.fill();
+          // Head crest
+          ctx.fillStyle = c3;
+          ctx.beginPath(); ctx.moveTo(-s*0.08, -s*0.4);
+          ctx.lineTo(0, -s*0.55); ctx.lineTo(s*0.08, -s*0.4); ctx.fill();
+          // Red eyes — menacing, glowing
+          ctx.save();
+          ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 8;
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath(); ctx.ellipse(-s*0.12, -s*0.33, s*0.05, s*0.03, -0.1, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(s*0.12, -s*0.33, s*0.05, s*0.03, 0.1, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
           // Metal teeth grin
-          ctx.fillStyle = '#ddd';
-          ctx.fillRect(-s*0.1, -s*0.22, s*0.2, s*0.04);
+          ctx.fillStyle = '#ccc';
+          for (let tt=0;tt<5;tt++) {
+            ctx.fillRect(-s*0.08+tt*s*0.04, -s*0.25, s*0.025, s*0.04);
+          }
         }
 
         // Name label
