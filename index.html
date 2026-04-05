@@ -890,42 +890,77 @@
 
       ctx.save();
 
-      // Main house body - stone facade (brighter in daytime)
-      const bodyGrad = ctx.createLinearGradient(hx - hw/2, hy - hh/3, hx + hw/2, hy + hh/2);
+      // Main house body - red brick (Canadian traditional)
       const hd = daylight;
-      const hc1 = lerpColor([90, 78, 66], [140, 125, 110], hd);
-      const hc2 = lerpColor([74, 63, 53], [120, 108, 95], hd);
-      const hc3 = lerpColor([61, 51, 40], [100, 90, 78], hd);
-      bodyGrad.addColorStop(0, `rgb(${hc1})`);
-      bodyGrad.addColorStop(0.5, `rgb(${hc2})`);
-      bodyGrad.addColorStop(1, `rgb(${hc3})`);
-      ctx.fillStyle = bodyGrad;
-      ctx.beginPath();
-      ctx.rect(hx - hw/2, hy - hh/3, hw, hh * 0.7);
-      ctx.fill();
+      const facadeX = hx - hw/2;
+      const facadeY = hy - hh/3;
+      const facadeW = hw;
+      const facadeH = hh * 0.7;
+      // Base brick color
+      const brickBase = lerpColor([120, 45, 35], [175, 75, 55], hd);
+      const brickDark = lerpColor([90, 32, 25], [140, 55, 40], hd);
+      const mortarColor = lerpColor([70, 65, 58], [160, 150, 135], hd);
+      ctx.fillStyle = `rgb(${brickBase})`;
+      ctx.fillRect(facadeX, facadeY, facadeW, facadeH);
+      // Draw brick pattern
+      const brickH = 6;
+      const brickW = 14;
+      const mortarW = 1.5;
+      ctx.fillStyle = `rgb(${mortarColor})`;
+      for (let row = 0; row < Math.ceil(facadeH / (brickH + mortarW)); row++) {
+        const by = facadeY + row * (brickH + mortarW);
+        if (by > facadeY + facadeH) break;
+        // Horizontal mortar line
+        ctx.fillRect(facadeX, by + brickH, facadeW, mortarW);
+        // Vertical mortar lines (offset every other row)
+        const offset = (row % 2) * (brickW / 2);
+        for (let col = 0; col < Math.ceil(facadeW / (brickW + mortarW)) + 1; col++) {
+          const bx = facadeX + col * (brickW + mortarW) + offset;
+          if (bx > facadeX && bx < facadeX + facadeW) {
+            ctx.fillRect(bx, by, mortarW, brickH);
+          }
+        }
+      }
+      // Subtle brick color variation
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      for (let row = 0; row < Math.ceil(facadeH / (brickH + mortarW)); row++) {
+        const offset = (row % 2) * (brickW / 2);
+        for (let col = 0; col < Math.ceil(facadeW / (brickW + mortarW)) + 1; col++) {
+          const bx = facadeX + col * (brickW + mortarW) + offset + mortarW;
+          const by = facadeY + row * (brickH + mortarW);
+          if (bx < facadeX || bx + brickW > facadeX + facadeW) continue;
+          if (by + brickH > facadeY + facadeH) continue;
+          // Random tint per brick
+          const seed = (row * 31 + col * 17) % 5;
+          if (seed === 0) ctx.fillStyle = `rgb(${brickDark})`;
+          else if (seed === 1) ctx.fillStyle = 'rgba(0,0,0,0.08)';
+          else continue;
+          ctx.fillRect(bx, by, brickW - mortarW, brickH);
+        }
+      }
+      ctx.restore();
 
-      // Roof
-      const roofGrad = ctx.createLinearGradient(hx, hy - hh/1.2, hx, hy - hh/3);
-      const rc1 = lerpColor([42, 42, 53], [80, 75, 70], hd);
-      const rc2 = lerpColor([26, 26, 37], [55, 50, 48], hd);
+      // Flat roof (typical Montreal)
+      const roofY = facadeY;
+      const roofH = hh * 0.06;
+      const roofOverhang = 8;
+      const rc1 = lerpColor([35, 35, 40], [70, 68, 65], hd);
+      const rc2 = lerpColor([25, 25, 30], [55, 52, 50], hd);
+      const roofGrad = ctx.createLinearGradient(0, roofY - roofH, 0, roofY);
       roofGrad.addColorStop(0, `rgb(${rc1})`);
       roofGrad.addColorStop(1, `rgb(${rc2})`);
       ctx.fillStyle = roofGrad;
-      ctx.beginPath();
-      ctx.moveTo(hx - hw/2 - 20, hy - hh/3);
-      ctx.lineTo(hx, hy - hh/1.2);
-      ctx.lineTo(hx + hw/2 + 20, hy - hh/3);
-      ctx.closePath();
-      ctx.fill();
-
-      // Roof edge highlight
-      ctx.strokeStyle = '#3a3a4a';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(hx - hw/2 - 20, hy - hh/3);
-      ctx.lineTo(hx, hy - hh/1.2);
-      ctx.lineTo(hx + hw/2 + 20, hy - hh/3);
-      ctx.stroke();
+      ctx.fillRect(facadeX - roofOverhang, roofY - roofH, facadeW + roofOverhang * 2, roofH);
+      // Roof edge / cornice
+      ctx.fillStyle = `rgb(${lerpColor([50, 48, 45], [90, 85, 80], hd)})`;
+      ctx.fillRect(facadeX - roofOverhang, roofY - 2, facadeW + roofOverhang * 2, 4);
+      // Parapet (short wall on top)
+      ctx.fillStyle = `rgb(${lerpColor([100, 40, 30], [155, 65, 48], hd)})`;
+      ctx.fillRect(facadeX, roofY - roofH - 8, facadeW, 8);
+      ctx.strokeStyle = `rgb(${lerpColor([70, 30, 22], [120, 50, 38], hd)})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(facadeX, roofY - roofH - 8, facadeW, 8);
 
       // Windows - warm glow at night, sky reflection during day
       const isNight = daylight < 0.5;
@@ -1010,40 +1045,85 @@
       ctx.closePath();
       ctx.fill();
 
-      // Front door (drawn after ground so it's visible)
+      // Front door — rectangular, red
       const doorGrad = ctx.createLinearGradient(doorX, doorY, doorX + doorW, doorY + doorH);
       doorGrad.addColorStop(0, '#cc2222');
+      doorGrad.addColorStop(0.5, '#aa1818');
       doorGrad.addColorStop(1, '#881111');
       ctx.fillStyle = doorGrad;
-      ctx.beginPath();
-      ctx.moveTo(doorX, doorY + doorH);
-      ctx.lineTo(doorX, doorY + doorW * 0.3);
-      ctx.arcTo(doorX, doorY, doorX + doorW / 2, doorY, doorW * 0.5);
-      ctx.arcTo(doorX + doorW, doorY, doorX + doorW, doorY + doorW * 0.3, doorW * 0.5);
-      ctx.lineTo(doorX + doorW, doorY + doorH);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(doorX, doorY, doorW, doorH);
       // Door frame
-      ctx.strokeStyle = '#661010';
+      ctx.strokeStyle = '#551010';
       ctx.lineWidth = 2;
-      ctx.stroke();
+      ctx.strokeRect(doorX, doorY, doorW, doorH);
+      // Panel lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 1;
+      const panelInset = doorW * 0.15;
+      ctx.strokeRect(doorX + panelInset, doorY + doorH * 0.08, doorW - panelInset * 2, doorH * 0.38);
+      ctx.strokeRect(doorX + panelInset, doorY + doorH * 0.52, doorW - panelInset * 2, doorH * 0.38);
 
       // Door handle
       ctx.beginPath();
-      ctx.arc(doorX + doorW * 0.75, doorY + doorH * 0.55, 3, 0, Math.PI * 2);
+      ctx.arc(doorX + doorW * 0.78, doorY + doorH * 0.52, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = '#c4a53a';
       ctx.fill();
 
-      // Door light
-      if (barrierActive) {
-        ctx.shadowColor = 'rgba(255, 200, 80, 0.6)';
-        ctx.shadowBlur = 30;
-        ctx.beginPath();
-        ctx.arc(hx, doorY + doorH * 0.15 - 15, 5, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 220, 140, 0.9)';
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
+      // Wrought iron lantern above door
+      const lanternX = hx;
+      const lanternY = doorY - 8;
+      // Iron bracket (curved arm)
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(lanternX, lanternY + 2);
+      ctx.lineTo(lanternX, lanternY - 6);
+      ctx.quadraticCurveTo(lanternX, lanternY - 10, lanternX, lanternY - 10);
+      ctx.stroke();
+      // Mounting plate
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(lanternX - 3, lanternY - 12, 6, 3);
+      // Lantern cage (small trapezoid)
+      ctx.beginPath();
+      ctx.moveTo(lanternX - 4, lanternY - 2);
+      ctx.lineTo(lanternX - 3, lanternY + 6);
+      ctx.lineTo(lanternX + 3, lanternY + 6);
+      ctx.lineTo(lanternX + 4, lanternY - 2);
+      ctx.closePath();
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Lantern top cap
+      ctx.beginPath();
+      ctx.moveTo(lanternX - 5, lanternY - 2);
+      ctx.lineTo(lanternX, lanternY - 5);
+      ctx.lineTo(lanternX + 5, lanternY - 2);
+      ctx.closePath();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fill();
+      // Bottom finial
+      ctx.beginPath();
+      ctx.moveTo(lanternX, lanternY + 6);
+      ctx.lineTo(lanternX, lanternY + 9);
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Warm light glow (subtle)
+      ctx.save();
+      ctx.globalAlpha = daylight < 0.5 ? 0.7 : 0.25;
+      const glowR = daylight < 0.5 ? 18 : 8;
+      const lgGrad = ctx.createRadialGradient(lanternX, lanternY + 2, 0, lanternX, lanternY + 2, glowR);
+      lgGrad.addColorStop(0, 'rgba(255, 210, 120, 0.8)');
+      lgGrad.addColorStop(0.5, 'rgba(255, 180, 80, 0.3)');
+      lgGrad.addColorStop(1, 'rgba(255, 150, 50, 0)');
+      ctx.fillStyle = lgGrad;
+      ctx.fillRect(lanternX - glowR, lanternY + 2 - glowR, glowR * 2, glowR * 2);
+      // Small flame/bulb
+      ctx.beginPath();
+      ctx.arc(lanternX, lanternY + 2, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = daylight < 0.5 ? '#ffe080' : '#ffcc66';
+      ctx.fill();
+      ctx.restore();
 
       // Bushes
       [[-0.38, 0.34], [0.38, 0.34], [-0.2, 0.36], [0.2, 0.36]].forEach(([ox, oy]) => {
