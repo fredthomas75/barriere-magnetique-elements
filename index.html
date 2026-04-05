@@ -74,9 +74,28 @@
     }
     .btn-superboost {
       background: linear-gradient(135deg, #ff0066, #ff8800, #ffee00, #00ff88, #00ccff, #aa00ff);
-      background-size: 300% 300%; color: #fff; animation: gradientShift 2s ease infinite;
-      display: none;
+      background-size: 300% 300%; color: #fff; animation: gradientShift 2s ease infinite; display: none;
     }
+    .btn-cobra { background: linear-gradient(135deg, #00aa22, #44ff44, #008800); background-size: 400% 400%;
+      color: #001a00; animation: gradientShift 3s ease infinite; display: none; }
+    .btn-lightning { background: linear-gradient(135deg, #0044ff, #00ccff, #fff, #00ccff);
+      background-size: 600% 600%; color: #000022; animation: gradientShift 2s ease infinite; display: none;
+      border: 1px solid rgba(100,200,255,0.5); }
+    .btn-fishwave { background: linear-gradient(135deg, #0055aa, #00aadd, #44ddff);
+      background-size: 500% 500%; color: #001833; animation: gradientShift 3s ease infinite; display: none; }
+    .btn-sharkwave { background: linear-gradient(135deg, #003355, #005577, #0088aa);
+      background-size: 500% 500%; color: #aaeeff; animation: gradientShift 3s ease infinite; display: none; }
+    .btn-pokemon { background: linear-gradient(135deg, #ff4444, #ff8800, #ffdd00, #44cc44, #4488ff, #aa44ff);
+      background-size: 700% 700%; color: #fff; animation: gradientShift 3s ease infinite; display: none;
+      border: 1px solid rgba(255,200,0,0.5); }
+    .btn-tornado { background: linear-gradient(135deg, #555, #888, #abc, #678);
+      background-size: 500% 500%; color: #111; animation: gradientShift 2s linear infinite; display: none; }
+    .btn-metalwave { background: linear-gradient(135deg, #888, #c0c0c0, #ffaa00, #00ccff);
+      background-size: 400% 400%; color: #1a1a2e; animation: gradientShift 3s ease infinite; display: none; }
+    .btn-ultraboost { background: linear-gradient(135deg, #ff0000, #ff6600, #ffcc00, #ff0000);
+      background-size: 500% 500%; color: #fff; font-weight: 900;
+      text-shadow: 0 0 10px rgba(255,0,0,0.8); animation: gradientShift 1.5s ease infinite; display: none;
+      border: 2px solid rgba(255,200,0,0.5); }
 
     .address-bar {
       position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%);
@@ -110,6 +129,14 @@
   <div class="controls">
     <button class="btn btn-activate" id="btnActivate" onclick="activateBarrier()">Activer Bouclier</button>
     <button class="btn btn-superboost" id="btnSuperBoost" onclick="triggerSuperBoost()">SUPER BOOST</button>
+    <button class="btn btn-cobra" id="btnCobra" onclick="triggerCobra()">COBRA</button>
+    <button class="btn btn-lightning" id="btnLightning" onclick="triggerLightning()">⚡ ECLAIRS</button>
+    <button class="btn btn-fishwave" id="btnFishWave" onclick="triggerFishWave()">🐟 POISSONS</button>
+    <button class="btn btn-sharkwave" id="btnSharkWave" onclick="triggerSharkWave()">🦈 REQUINS</button>
+    <button class="btn btn-pokemon" id="btnPokemon" onclick="triggerPokemon()">POKEMON</button>
+    <button class="btn btn-tornado" id="btnTornado" onclick="triggerTornado()">🌪️ TORNADE</button>
+    <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">DRAGON METAL</button>
+    <button class="btn btn-ultraboost" id="btnUltraBoost" onclick="triggerUltraBoost()">ULTRA BOOST</button>
     <button class="btn btn-deactivate" id="btnDeactivate" onclick="deactivateBarrier()">Desactiver</button>
   </div>
 
@@ -618,6 +645,7 @@
 
     // ===== GAME STATE =====
     let lastFireTime = 0;
+    const allBtns = ['btnSuperBoost','btnCobra','btnLightning','btnFishWave','btnSharkWave','btnPokemon','btnTornado','btnMetalWave','btnUltraBoost'];
 
     window.activateBarrier = function() {
       if (barrierActive) return;
@@ -626,26 +654,730 @@
       document.getElementById('shieldStatus').textContent = 'BOUCLIER ACTIF';
       document.getElementById('btnActivate').style.display = 'none';
       document.getElementById('btnDeactivate').style.display = 'block';
-      document.getElementById('btnSuperBoost').style.display = 'block';
+      allBtns.forEach(id => document.getElementById(id).style.display = 'block');
     };
 
     window.deactivateBarrier = function() {
-      barrierActive = false;
-      superBoostActive = false;
+      barrierActive = false; superBoostActive = false;
+      cobraActive = false; lightningActive = false; fishWaveActive = false;
+      sharkWaveActive = false; pokemonActive = false; tornadoActive = false; metalWaveActive = false;
       document.getElementById('shieldStatus').className = 'shield-status inactive';
       document.getElementById('shieldStatus').textContent = 'BOUCLIER INACTIF';
       document.getElementById('btnActivate').style.display = 'block';
       document.getElementById('btnDeactivate').style.display = 'none';
-      document.getElementById('btnSuperBoost').style.display = 'none';
-      // Remove all monsters
-      for (const m of monsters) scene.remove(m);
-      monsters.length = 0;
+      allBtns.forEach(id => document.getElementById(id).style.display = 'none');
+      for (const m of monsters) scene.remove(m); monsters.length = 0;
+      // Clean up attack objects
+      [cobraSegments, lightningBolts, fishObjs, sharkObjs, pokemonObjs, tornadoObj, dragonSegments].forEach(arr => {
+        if (arr) { if (Array.isArray(arr)) arr.forEach(o => { if(o?.parent) scene.remove(o); }); }
+      });
     };
 
     window.triggerSuperBoost = function() {
       superBoostActive = true;
       setTimeout(() => { superBoostActive = false; }, 5000);
     };
+
+    // Helper: kill a monster
+    function killMonster(m, t) {
+      if (m.userData.state !== 'approaching') return;
+      m.userData.state = 'hit';
+      m.userData.hitTime = t;
+      const pushDir = m.position.clone().normalize();
+      m.userData.flyVel.copy(pushDir.multiplyScalar(0.3));
+      m.userData.flyVel.y = 0.2 + Math.random() * 0.15;
+      monstersDefeated++;
+      document.getElementById('monsterCount').textContent = monstersDefeated;
+    }
+
+    // ===== COBRA VENIMEUX =====
+    let cobraActive = false, cobraTimer = 0;
+    let cobraSegments = []; // 3D segments
+    const COBRA_SEGS = 20;
+
+    window.triggerCobra = function() {
+      if (cobraActive) return;
+      cobraActive = true; cobraTimer = 0;
+      // Create cobra body segments
+      cobraSegments.forEach(s => scene.remove(s));
+      cobraSegments = [];
+      const cobraMat = new THREE.MeshStandardMaterial({ color: 0x22aa22, roughness: 0.4, metalness: 0.3 });
+      for (let i = 0; i < COBRA_SEGS; i++) {
+        const r = 0.3 - i * 0.01;
+        const seg = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.1, r), 8, 6), cobraMat);
+        seg.castShadow = true;
+        scene.add(seg);
+        cobraSegments.push(seg);
+      }
+      // Head is segment 0 — make it bigger with eyes
+      cobraSegments[0].scale.set(1.5, 1.2, 1.3);
+      const eyeMat2 = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      [-1,1].forEach(side => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), eyeMat2);
+        eye.position.set(side * 0.15, 0.12, 0.2);
+        cobraSegments[0].add(eye);
+      });
+    };
+
+    function updateCobra(t) {
+      if (!cobraActive) return;
+      cobraTimer++;
+      const orbitAngle = t * 0.8;
+      const orbitR = 10.5;
+      // Head position — orbit outside barrier
+      const hx = Math.cos(orbitAngle) * orbitR;
+      const hz = Math.sin(orbitAngle) * orbitR;
+      const hy = 2 + Math.sin(t * 2) * 0.5;
+
+      if (cobraSegments.length > 0) {
+        cobraSegments[0].position.set(hx, hy, hz);
+        cobraSegments[0].lookAt(0, hy, 0);
+        // Body follows head with delay
+        for (let i = 1; i < cobraSegments.length; i++) {
+          const prev = cobraSegments[i-1].position;
+          const curr = cobraSegments[i].position;
+          curr.lerp(prev, 0.15);
+          curr.y = hy - i * 0.05 + Math.sin(t * 3 + i * 0.5) * 0.15;
+        }
+      }
+
+      // Bite nearby monsters
+      for (const m of monsters) {
+        if (m.userData.state !== 'approaching') continue;
+        if (cobraSegments.length && cobraSegments[0].position.distanceTo(m.position) < 1.5) {
+          killMonster(m, t);
+        }
+      }
+
+      if (cobraTimer > 480) {
+        cobraActive = false;
+        cobraSegments.forEach(s => scene.remove(s));
+        cobraSegments = [];
+      }
+    }
+
+    // ===== LIGHTNING STORM =====
+    let lightningActive = false, lightningTimer = 0;
+    let lightningBolts = [];
+
+    window.triggerLightning = function() {
+      if (lightningActive) return;
+      lightningActive = true; lightningTimer = 0;
+      lightningBolts.forEach(b => scene.remove(b));
+      lightningBolts = [];
+    };
+
+    function createBolt(target) {
+      const points = [];
+      const startY = 25;
+      const segs = 10;
+      for (let i = 0; i <= segs; i++) {
+        const p = i / segs;
+        points.push(new THREE.Vector3(
+          target.x + (1-p) * (Math.random()-0.5) * 6,
+          startY * (1-p) + target.y * p,
+          target.z + (1-p) * (Math.random()-0.5) * 6
+        ));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      const mat = new THREE.LineBasicMaterial({ color: 0xaaddff, linewidth: 2, transparent: true, opacity: 1 });
+      const bolt = new THREE.Line(geo, mat);
+      bolt.userData = { life: 15 };
+      scene.add(bolt);
+      lightningBolts.push(bolt);
+
+      // Glow bolt
+      const mat2 = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1, transparent: true, opacity: 0.8 });
+      const bolt2 = new THREE.Line(geo.clone(), mat2);
+      bolt2.userData = { life: 12 };
+      scene.add(bolt2);
+      lightningBolts.push(bolt2);
+    }
+
+    function updateLightning(t) {
+      if (!lightningActive) return;
+      lightningTimer++;
+
+      // Strike a monster every ~20 frames
+      if (lightningTimer % 20 === 0 && lightningTimer < 350) {
+        const targets = monsters.filter(m => m.userData.state === 'approaching');
+        if (targets.length) {
+          const target = targets[Math.floor(Math.random() * targets.length)];
+          createBolt(target.position);
+          killMonster(target, t);
+        }
+      }
+
+      // Update bolt lifetimes
+      for (let i = lightningBolts.length - 1; i >= 0; i--) {
+        lightningBolts[i].userData.life--;
+        lightningBolts[i].material.opacity = lightningBolts[i].userData.life / 15;
+        if (lightningBolts[i].userData.life <= 0) {
+          scene.remove(lightningBolts[i]);
+          lightningBolts.splice(i, 1);
+        }
+      }
+
+      if (lightningTimer > 420 && lightningBolts.length === 0) {
+        lightningActive = false;
+      }
+    }
+
+    // ===== FISH WAVE =====
+    let fishWaveActive = false, fishWaveTimer = 0;
+    let fishObjs = [], waterPlane = null;
+
+    window.triggerFishWave = function() {
+      if (fishWaveActive) return;
+      fishWaveActive = true; fishWaveTimer = 0;
+      // Create water plane
+      const wGeo = new THREE.CircleGeometry(25, 64);
+      const wMat = new THREE.MeshStandardMaterial({
+        color: 0x1166aa, transparent: true, opacity: 0, roughness: 0.2, metalness: 0.3
+      });
+      waterPlane = new THREE.Mesh(wGeo, wMat);
+      waterPlane.rotation.x = -Math.PI / 2;
+      waterPlane.position.y = 0.05;
+      scene.add(waterPlane);
+
+      // Spawn fish
+      fishObjs.forEach(f => scene.remove(f));
+      fishObjs = [];
+      for (let i = 0; i < 6; i++) {
+        const fGroup = new THREE.Group();
+        const body = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3, 8, 6),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5) })
+        );
+        body.scale.set(1.5, 0.8, 0.8);
+        fGroup.add(body);
+        // Tail
+        const tail = new THREE.Mesh(
+          new THREE.ConeGeometry(0.2, 0.4, 4),
+          body.material
+        );
+        tail.position.x = -0.5; tail.rotation.z = Math.PI / 2;
+        fGroup.add(tail);
+
+        const angle = Math.random() * Math.PI * 2;
+        fGroup.position.set(Math.cos(angle) * 12, 0.3, Math.sin(angle) * 12);
+        fGroup.userData = { speed: 0.04 + Math.random() * 0.03, angle, hunting: false, target: null };
+        scene.add(fGroup);
+        fishObjs.push(fGroup);
+      }
+    };
+
+    function updateFishWave(t) {
+      if (!fishWaveActive) return;
+      fishWaveTimer++;
+
+      // Water rises
+      if (waterPlane) {
+        const wl = Math.min(1, fishWaveTimer / 80);
+        waterPlane.material.opacity = wl * 0.4;
+        waterPlane.position.y = 0.05 + wl * 0.2;
+        if (fishWaveTimer > 400) {
+          waterPlane.material.opacity = Math.max(0, waterPlane.material.opacity - 0.005);
+        }
+      }
+
+      // Fish hunt monsters
+      for (const fish of fishObjs) {
+        const fd = fish.userData;
+        // Find target
+        if (!fd.target || fd.target.userData?.state !== 'approaching') {
+          fd.target = null;
+          let closest = null, closestDist = Infinity;
+          for (const m of monsters) {
+            if (m.userData.state !== 'approaching') continue;
+            const d = fish.position.distanceTo(m.position);
+            if (d < closestDist) { closestDist = d; closest = m; }
+          }
+          fd.target = closest;
+        }
+
+        if (fd.target) {
+          const dir = fd.target.position.clone().sub(fish.position).normalize();
+          fish.position.add(dir.multiplyScalar(fd.speed * 1.5));
+          fish.lookAt(fd.target.position);
+          if (fish.position.distanceTo(fd.target.position) < 1) {
+            killMonster(fd.target, t);
+            fd.target = null;
+          }
+        } else {
+          fd.angle += 0.02;
+          fish.position.x += Math.cos(fd.angle) * fd.speed;
+          fish.position.z += Math.sin(fd.angle) * fd.speed;
+        }
+        fish.position.y = 0.3 + Math.sin(t * 3 + fishObjs.indexOf(fish)) * 0.15;
+      }
+
+      if (fishWaveTimer > 540) {
+        fishWaveActive = false;
+        fishObjs.forEach(f => scene.remove(f)); fishObjs = [];
+        if (waterPlane) { scene.remove(waterPlane); waterPlane = null; }
+      }
+    }
+
+    // ===== SHARK WAVE =====
+    let sharkWaveActive = false, sharkWaveTimer = 0;
+    let sharkObjs = [], sharkWaterPlane = null;
+
+    window.triggerSharkWave = function() {
+      if (sharkWaveActive) return;
+      sharkWaveActive = true; sharkWaveTimer = 0;
+      // Dark ocean water
+      const wGeo = new THREE.CircleGeometry(25, 64);
+      const wMat = new THREE.MeshStandardMaterial({
+        color: 0x0a2a4a, transparent: true, opacity: 0, roughness: 0.15, metalness: 0.4
+      });
+      sharkWaterPlane = new THREE.Mesh(wGeo, wMat);
+      sharkWaterPlane.rotation.x = -Math.PI / 2;
+      sharkWaterPlane.position.y = 0.06;
+      scene.add(sharkWaterPlane);
+
+      // Spawn sharks
+      sharkObjs.forEach(s => scene.remove(s));
+      sharkObjs = [];
+      for (let i = 0; i < 4; i++) {
+        const sGroup = new THREE.Group();
+        const bodyGeo3 = new THREE.ConeGeometry(0.4, 2, 8);
+        bodyGeo3.rotateZ(-Math.PI / 2);
+        const sharkMat = new THREE.MeshStandardMaterial({ color: 0x4a5a6a, roughness: 0.5 });
+        const sharkBody = new THREE.Mesh(bodyGeo3, sharkMat);
+        sGroup.add(sharkBody);
+        // Dorsal fin
+        const fin = new THREE.Mesh(
+          new THREE.ConeGeometry(0.15, 0.6, 4),
+          sharkMat
+        );
+        fin.position.set(0, 0.5, 0);
+        sGroup.add(fin);
+        // Tail
+        const tailFin = new THREE.Mesh(
+          new THREE.ConeGeometry(0.25, 0.5, 4),
+          sharkMat
+        );
+        tailFin.position.set(-1.2, 0.2, 0);
+        tailFin.rotation.z = 0.5;
+        sGroup.add(tailFin);
+        // White belly
+        const belly = new THREE.Mesh(
+          new THREE.SphereGeometry(0.35, 8, 6),
+          new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6 })
+        );
+        belly.scale.set(2, 0.6, 0.8);
+        belly.position.y = -0.1;
+        sGroup.add(belly);
+        // Eyes
+        [-1,1].forEach(side => {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({color:0x111111}));
+          eye.position.set(0.6, 0.1, side * 0.3);
+          sGroup.add(eye);
+        });
+
+        const angle = Math.random() * Math.PI * 2;
+        sGroup.position.set(Math.cos(angle) * 13, 0.3, Math.sin(angle) * 13);
+        sGroup.userData = { speed: 0.06 + Math.random() * 0.03, angle, target: null, biteTimer: 0 };
+        scene.add(sGroup);
+        sharkObjs.push(sGroup);
+      }
+    };
+
+    function updateSharkWave(t) {
+      if (!sharkWaveActive) return;
+      sharkWaveTimer++;
+
+      if (sharkWaterPlane) {
+        const wl = Math.min(1, sharkWaveTimer / 90);
+        sharkWaterPlane.material.opacity = wl * 0.5;
+        sharkWaterPlane.position.y = 0.06 + wl * 0.3 + Math.sin(t * 1.5) * 0.1;
+        if (sharkWaveTimer > 460) sharkWaterPlane.material.opacity = Math.max(0, sharkWaterPlane.material.opacity - 0.005);
+      }
+
+      for (const shark of sharkObjs) {
+        const sd = shark.userData;
+        if (sd.biteTimer > 0) { sd.biteTimer--; continue; }
+
+        // Hunt monsters
+        if (!sd.target || sd.target.userData?.state !== 'approaching') {
+          sd.target = null;
+          let closest = null, cDist = Infinity;
+          for (const m of monsters) {
+            if (m.userData.state !== 'approaching') continue;
+            const d = shark.position.distanceTo(m.position);
+            if (d < cDist) { cDist = d; closest = m; }
+          }
+          sd.target = closest;
+        }
+
+        if (sd.target) {
+          const dir = sd.target.position.clone().sub(shark.position);
+          dir.y = 0;
+          dir.normalize();
+          shark.position.add(dir.multiplyScalar(sd.speed * 2));
+          shark.lookAt(shark.position.clone().add(dir));
+          if (shark.position.distanceTo(sd.target.position) < 2) {
+            killMonster(sd.target, t);
+            sd.target = null;
+            sd.biteTimer = 30;
+          }
+        } else {
+          sd.angle += 0.015;
+          const r = 12;
+          shark.position.x = Math.cos(sd.angle) * r;
+          shark.position.z = Math.sin(sd.angle) * r;
+          shark.lookAt(new THREE.Vector3(Math.cos(sd.angle + 0.1) * r, 0.3, Math.sin(sd.angle + 0.1) * r));
+        }
+        shark.position.y = 0.3 + Math.sin(t * 2 + sharkObjs.indexOf(shark)) * 0.2;
+      }
+
+      if (sharkWaveTimer > 600) {
+        sharkWaveActive = false;
+        sharkObjs.forEach(s => scene.remove(s)); sharkObjs = [];
+        if (sharkWaterPlane) { scene.remove(sharkWaterPlane); sharkWaterPlane = null; }
+      }
+    }
+
+    // ===== TORNADO =====
+    let tornadoActive = false, tornadoTimer = 0;
+    let tornadoObj = null, tornadoCaught = [];
+
+    window.triggerTornado = function() {
+      if (tornadoActive) return;
+      tornadoActive = true; tornadoTimer = 0; tornadoCaught = [];
+      // Build tornado from stacked rings
+      tornadoObj = new THREE.Group();
+      for (let i = 0; i < 15; i++) {
+        const p = i / 15;
+        const r = 2 * (1 - p) + 0.3;
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(r, 0.15, 6, 16),
+          new THREE.MeshStandardMaterial({
+            color: new THREE.Color().setHSL(0, 0, 0.4 + p * 0.3),
+            transparent: true, opacity: 0.5, roughness: 0.8
+          })
+        );
+        ring.position.y = i * 1.0;
+        ring.rotation.x = Math.PI / 2;
+        tornadoObj.add(ring);
+      }
+      tornadoObj.position.set(20, 0, 0);
+      scene.add(tornadoObj);
+    };
+
+    function updateTornado(t) {
+      if (!tornadoActive || !tornadoObj) return;
+      tornadoTimer++;
+
+      // Move tornado
+      if (tornadoTimer < 60) {
+        tornadoObj.position.lerp(new THREE.Vector3(Math.cos(t * 0.3) * 12, 0, Math.sin(t * 0.3) * 12), 0.03);
+      } else if (tornadoTimer < 360) {
+        const a = t * 0.5;
+        tornadoObj.position.set(Math.cos(a) * 12, 0, Math.sin(a) * 12);
+      } else {
+        tornadoObj.position.y += 0.15;
+      }
+
+      // Spin rings
+      tornadoObj.children.forEach((ring, i) => {
+        ring.rotation.z = t * (2 + i * 0.3);
+      });
+
+      // Catch monsters
+      if (tornadoTimer >= 60 && tornadoTimer < 360) {
+        for (const m of monsters) {
+          if (m.userData.state !== 'approaching') continue;
+          if (tornadoCaught.includes(m)) continue;
+          const d = new THREE.Vector2(m.position.x - tornadoObj.position.x, m.position.z - tornadoObj.position.z).length();
+          if (d < 4) {
+            m.userData.state = 'caught';
+            tornadoCaught.push(m);
+          }
+        }
+      }
+
+      // Spin caught monsters
+      for (let i = tornadoCaught.length - 1; i >= 0; i--) {
+        const m = tornadoCaught[i];
+        if (!monsters.includes(m)) { tornadoCaught.splice(i, 1); continue; }
+        const a = t * 3 + i * 1.5;
+        const r = 2 + Math.sin(t + i) * 0.5;
+        m.position.x = tornadoObj.position.x + Math.cos(a) * r;
+        m.position.z = tornadoObj.position.z + Math.sin(a) * r;
+        m.position.y = tornadoObj.position.y + 3 + i * 1.5 + tornadoTimer * 0.005;
+        m.rotation.x = t * 2; m.rotation.z = t * 3;
+
+        // Eject after spinning
+        if (m.position.y > 15) {
+          m.userData.state = 'hit'; m.userData.hitTime = t;
+          m.userData.flyVel.set((Math.random()-0.5)*0.3, 0.3, (Math.random()-0.5)*0.3);
+          monstersDefeated++;
+          document.getElementById('monsterCount').textContent = monstersDefeated;
+          tornadoCaught.splice(i, 1);
+        }
+      }
+
+      if (tornadoTimer > 480 && tornadoCaught.length === 0) {
+        tornadoActive = false;
+        scene.remove(tornadoObj); tornadoObj = null;
+      }
+    }
+
+    // ===== POKEMON =====
+    let pokemonActive = false, pokemonTimer = 0;
+    let pokemonObjs = [], pokemonAttacks = [];
+    const PKM_DEFS = [
+      { name: 'Dracaufeu', color: 0xe87030, atk: 0xff4400, from: 'sky', size: 1.2 },
+      { name: 'Rayquaza', color: 0x2a8a3a, atk: 0x00ff66, from: 'sky', size: 1.0 },
+      { name: 'Kyurem', color: 0x80aacc, atk: 0x66ccff, from: 'sky', size: 1.4 },
+      { name: 'Trioxhydre', color: 0x3a3a7a, atk: 0xaa44ff, from: 'left', size: 1.1 },
+      { name: 'Fulgulairo', color: 0x333344, atk: 0xffdd00, from: 'sky', size: 0.8 },
+      { name: 'Rugit-Lune', color: 0x1a2a5a, atk: 0xcc3333, from: 'sky', size: 1.3 },
+      { name: 'Genesect', color: 0x6a3a8a, atk: 0xff4400, from: 'right', size: 0.9 }
+    ];
+
+    window.triggerPokemon = function() {
+      if (pokemonActive) return;
+      pokemonActive = true; pokemonTimer = 0;
+      pokemonObjs.forEach(p => scene.remove(p)); pokemonObjs = [];
+      pokemonAttacks.forEach(a => scene.remove(a)); pokemonAttacks = [];
+
+      // Pick 3 random
+      const picks = [...PKM_DEFS].sort(() => Math.random()-0.5).slice(0, 3);
+      picks.forEach((def, idx) => {
+        const g = new THREE.Group();
+        // Body
+        const bodyM = new THREE.Mesh(
+          new THREE.SphereGeometry(def.size * 0.5, 12, 10),
+          new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.4, metalness: 0.2 })
+        );
+        bodyM.castShadow = true;
+        g.add(bodyM);
+        // Eyes
+        [-1,1].forEach(side => {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(def.size*0.1, 6, 6), new THREE.MeshBasicMaterial({color:0xffffff}));
+          eye.position.set(side * def.size*0.2, def.size*0.15, def.size*0.4);
+          g.add(eye);
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(def.size*0.05, 6, 6), new THREE.MeshBasicMaterial({color:0x000000}));
+          pupil.position.set(side * def.size*0.2, def.size*0.15, def.size*0.45);
+          g.add(pupil);
+        });
+        // Wings for flyers
+        if (def.from === 'sky') {
+          [-1,1].forEach(side => {
+            const wing = new THREE.Mesh(
+              new THREE.PlaneGeometry(def.size * 0.8, def.size * 0.5),
+              new THREE.MeshStandardMaterial({ color: def.color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+            );
+            wing.position.set(side * def.size * 0.6, def.size * 0.2, 0);
+            wing.rotation.y = side * 0.3;
+            g.add(wing);
+          });
+        }
+
+        // Start position
+        let sx, sy, sz;
+        if (def.from === 'sky') { sx = (idx-1)*6; sy = 20; sz = -5; }
+        else if (def.from === 'left') { sx = -25; sy = 3; sz = (idx-1)*4; }
+        else { sx = 25; sy = 3; sz = (idx-1)*4; }
+        g.position.set(sx, sy, sz);
+
+        const targetX = (idx - 1) * 5;
+        const targetZ = -8 - idx * 2;
+        g.userData = {
+          def, state: 'arriving', targetX, targetZ, targetY: 3 + Math.random() * 2,
+          atkTimer: 0, bobPhase: Math.random() * Math.PI * 2
+        };
+        scene.add(g);
+        pokemonObjs.push(g);
+      });
+    };
+
+    function updatePokemon(t) {
+      if (!pokemonActive) return;
+      pokemonTimer++;
+
+      for (const p of pokemonObjs) {
+        const ud = p.userData;
+        ud.bobPhase += 0.03;
+
+        if (ud.state === 'arriving') {
+          p.position.lerp(new THREE.Vector3(ud.targetX, ud.targetY, ud.targetZ), 0.04);
+          if (p.position.distanceTo(new THREE.Vector3(ud.targetX, ud.targetY, ud.targetZ)) < 0.5) ud.state = 'active';
+        }
+
+        if (ud.state === 'active') {
+          p.position.y = ud.targetY + Math.sin(ud.bobPhase) * 0.3;
+
+          // Chase nearest monster
+          let closest = null, cDist = Infinity;
+          for (const m of monsters) {
+            if (m.userData.state !== 'approaching') continue;
+            const d = p.position.distanceTo(m.position);
+            if (d < cDist) { cDist = d; closest = m; }
+          }
+          if (closest && cDist > 3) {
+            const dir = closest.position.clone().sub(p.position).normalize();
+            p.position.add(dir.multiplyScalar(0.06));
+            p.lookAt(closest.position);
+          }
+
+          // Fire projectile
+          ud.atkTimer++;
+          if (ud.atkTimer > 35 && closest) {
+            ud.atkTimer = 0;
+            const dir = closest.position.clone().sub(p.position).normalize();
+            const proj = new THREE.Mesh(
+              new THREE.SphereGeometry(0.15, 6, 6),
+              new THREE.MeshBasicMaterial({ color: ud.def.atk })
+            );
+            proj.position.copy(p.position);
+            proj.userData = { vel: dir.multiplyScalar(0.5), life: 60 };
+            scene.add(proj);
+            pokemonAttacks.push(proj);
+          }
+
+          if (pokemonTimer > 420) ud.state = 'leaving';
+        }
+
+        if (ud.state === 'leaving') {
+          if (ud.def.from === 'sky') p.position.y += 0.15;
+          else if (ud.def.from === 'left') p.position.x -= 0.2;
+          else p.position.x += 0.2;
+          p.scale.multiplyScalar(0.995);
+        }
+      }
+
+      // Update pokemon projectiles
+      for (let i = pokemonAttacks.length - 1; i >= 0; i--) {
+        const a = pokemonAttacks[i];
+        a.position.add(a.userData.vel);
+        a.userData.life--;
+        for (const m of monsters) {
+          if (m.userData.state !== 'approaching') continue;
+          if (a.position.distanceTo(m.position) < m.userData.size + 0.3) {
+            killMonster(m, clock.getElapsedTime());
+            a.userData.life = 0; break;
+          }
+        }
+        if (a.userData.life <= 0 || a.position.length() > 40) {
+          scene.remove(a); pokemonAttacks.splice(i, 1);
+        }
+      }
+
+      if (pokemonTimer > 540) {
+        pokemonActive = false;
+        pokemonObjs.forEach(p => scene.remove(p)); pokemonObjs = [];
+        pokemonAttacks.forEach(a => scene.remove(a)); pokemonAttacks = [];
+      }
+    }
+
+    // ===== METAL WAVE + CHINESE DRAGON =====
+    let metalWaveActive = false, metalWaveTimer = 0;
+    let dragonSegments = [];
+    const DRAGON_SEGS = 25;
+
+    window.triggerMetalWave = function() {
+      if (metalWaveActive) return;
+      metalWaveActive = true; metalWaveTimer = 0;
+      dragonSegments.forEach(s => scene.remove(s));
+      dragonSegments = [];
+      for (let i = 0; i < DRAGON_SEGS; i++) {
+        const p = i / DRAGON_SEGS;
+        const r = 0.4 - p * 0.012;
+        const seg = new THREE.Mesh(
+          new THREE.SphereGeometry(Math.max(0.1, r), 8, 6),
+          new THREE.MeshStandardMaterial({
+            color: i % 3 === 0 ? 0xffcc00 : 0xcc2222,
+            roughness: 0.3, metalness: 0.5
+          })
+        );
+        seg.castShadow = true;
+        scene.add(seg);
+        dragonSegments.push(seg);
+      }
+      // Dragon head decorations
+      if (dragonSegments.length > 0) {
+        dragonSegments[0].scale.set(1.8, 1.5, 1.5);
+        // Antlers
+        [-1,1].forEach(side => {
+          const antler = new THREE.Mesh(
+            new THREE.ConeGeometry(0.05, 0.5, 4),
+            new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.6 })
+          );
+          antler.position.set(side * 0.2, 0.3, 0.1);
+          antler.rotation.z = side * 0.4;
+          dragonSegments[0].add(antler);
+        });
+        // Eyes
+        [-1,1].forEach(side => {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), new THREE.MeshBasicMaterial({color:0xffff00}));
+          eye.position.set(side * 0.15, 0.08, 0.3);
+          dragonSegments[0].add(eye);
+        });
+      }
+    };
+
+    function updateMetalWave(t) {
+      if (!metalWaveActive) return;
+      metalWaveTimer++;
+
+      const orbitR = 11;
+      const orbitSpeed = t * 0.6;
+      // Head position
+      const hx = Math.cos(orbitSpeed) * orbitR;
+      const hz = Math.sin(orbitSpeed) * orbitR;
+      const hy = 4 + Math.sin(t * 2) * 1.5;
+
+      if (dragonSegments.length > 0) {
+        dragonSegments[0].position.set(hx, hy, hz);
+        dragonSegments[0].lookAt(0, hy, 0);
+        for (let i = 1; i < dragonSegments.length; i++) {
+          const prev = dragonSegments[i-1].position;
+          dragonSegments[i].position.lerp(prev, 0.12);
+          dragonSegments[i].position.y = hy - Math.sin(t * 3 + i * 0.4) * 0.8;
+        }
+      }
+
+      // Catch and fling monsters
+      for (const m of monsters) {
+        if (m.userData.state !== 'approaching') continue;
+        if (dragonSegments.length && dragonSegments[0].position.distanceTo(m.position) < 2) {
+          killMonster(m, t);
+          // Extra upward launch
+          m.userData.flyVel.y = 0.4;
+        }
+      }
+
+      // Launch phase — dragon flies upward
+      if (metalWaveTimer > 400) {
+        dragonSegments.forEach(s => { s.position.y += 0.1; });
+      }
+
+      if (metalWaveTimer > 540) {
+        metalWaveActive = false;
+        dragonSegments.forEach(s => scene.remove(s)); dragonSegments = [];
+      }
+    }
+
+    // ===== ULTRA BOOST =====
+    window.triggerUltraBoost = function() {
+      if (!barrierActive) return;
+      superBoostActive = true;
+      if (!cobraActive) window.triggerCobra();
+      if (!lightningActive) setTimeout(() => window.triggerLightning(), 500);
+      if (!metalWaveActive) setTimeout(() => window.triggerMetalWave(), 1000);
+      if (!tornadoActive) setTimeout(() => window.triggerTornado(), 1500);
+      if (!pokemonActive) setTimeout(() => window.triggerPokemon(), 800);
+      // Spawn extra monsters
+      for (let i = 0; i < 15; i++) createMonster();
+      setTimeout(() => { superBoostActive = false; }, 10000);
+    };
+
+    // Initial hide
+    allBtns.forEach(id => document.getElementById(id).style.display = 'none');
 
     // ===== ANIMATION LOOP =====
     const clock = new THREE.Clock();
@@ -709,16 +1441,15 @@
         ud.wobblePhase += 0.03;
 
         if (ud.state === 'approaching') {
-          // Move toward house
-          const dir = m.position.clone().negate().normalize();
+          // Move toward house (keep above ground)
+          const dir = new THREE.Vector3(-m.position.x, 0, -m.position.z).normalize();
           m.position.add(dir.clone().multiplyScalar(ud.speed * (superBoostActive ? 0.5 : 1)));
-          m.position.y += Math.sin(ud.wobblePhase) * 0.02;
+          m.position.y = Math.max(ud.size + 0.2, 1.5 + Math.sin(ud.wobblePhase) * 0.5);
           m.rotation.y = Math.atan2(-m.position.x, -m.position.z);
 
-          // Check barrier collision
-          const dist = Math.sqrt(m.position.x**2 + (m.position.z)**2);
-          const yDist = Math.abs(m.position.y - 3);
-          if (dist < 9.5 && yDist < 4 && barrierActive) {
+          // Check barrier collision (horizontal distance)
+          const dist = Math.sqrt(m.position.x**2 + m.position.z**2);
+          if (dist < 9.5 && barrierActive) {
             ud.state = 'hit';
             ud.hitTime = t;
             const pushDir = m.position.clone().normalize();
@@ -784,6 +1515,15 @@
           projectiles.splice(i, 1);
         }
       }
+
+      // Update all attack systems
+      updateCobra(t);
+      updateLightning(t);
+      updateFishWave(t);
+      updateSharkWave(t);
+      updateTornado(t);
+      updatePokemon(t);
+      updateMetalWave(t);
 
       // Gentle camera sway
       camera.position.x = Math.sin(t * 0.1) * 0.5;
