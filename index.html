@@ -341,6 +341,34 @@
       50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,100,200,0.8), 0 0 80px rgba(0,180,255,0.5); }
     }
 
+    .btn-pokemon {
+      background: linear-gradient(135deg, #ff4444, #ff8800, #ffdd00, #44cc44, #4488ff, #aa44ff, #ff44aa);
+      background-size: 700% 700%;
+      color: #fff;
+      font-size: clamp(8px, 1.4vw, 11px);
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+      box-shadow: 0 0 25px rgba(255,100,0,0.4), 0 0 50px rgba(100,100,255,0.2), 0 4px 15px rgba(0,0,0,0.4);
+      animation: pokemonShine 3s ease infinite;
+      display: none;
+      border: 2px solid rgba(255,200,0,0.5);
+    }
+    .btn-pokemon:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 40px rgba(255,200,0,0.6), 0 0 70px rgba(100,100,255,0.4);
+    }
+    .btn-pokemon:active { transform: scale(0.95); }
+    .btn-pokemon.pokemon-active {
+      animation: pokemonShine 0.4s ease infinite, boostPulse 0.5s ease infinite;
+      border-color: #fff;
+    }
+    @keyframes pokemonShine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     .btn-tornado {
       background: linear-gradient(135deg, #555566, #888899, #aabbcc, #667788, #445566, #99aabb);
       background-size: 500% 500%;
@@ -657,6 +685,9 @@
     </button>
     <button class="btn btn-sharkwave" id="btnSharkWave" onclick="triggerSharkWave()">
       🦈 REQUINS 🦈
+    </button>
+    <button class="btn btn-pokemon" id="btnPokemon" onclick="triggerPokemon()">
+      POKEMON
     </button>
     <button class="btn btn-tornado" id="btnTornado" onclick="triggerTornado()">
       🌪️ TORNADE 🌪️
@@ -3310,6 +3341,7 @@
       document.getElementById('btnLightning').style.display = 'block';
       document.getElementById('btnFishWave').style.display = 'block';
       document.getElementById('btnSharkWave').style.display = 'block';
+      document.getElementById('btnPokemon').style.display = 'block';
       document.getElementById('btnTornado').style.display = 'block';
       document.getElementById('btnMetalWave').style.display = 'block';
       document.getElementById('btnUltraBoost').style.display = 'block';
@@ -3342,6 +3374,8 @@
       document.getElementById('btnFishWave').classList.remove('fishwave-active');
       document.getElementById('btnSharkWave').style.display = 'none';
       document.getElementById('btnSharkWave').classList.remove('sharkwave-active');
+      document.getElementById('btnPokemon').style.display = 'none';
+      document.getElementById('btnPokemon').classList.remove('pokemon-active');
       document.getElementById('btnTornado').style.display = 'none';
       document.getElementById('btnTornado').classList.remove('tornado-active');
       document.getElementById('btnMetalWave').style.display = 'none';
@@ -3359,6 +3393,9 @@
       tornadoActive = false;
       tornadoCaughtMonsters = [];
       tornadoDebris = [];
+      pokemonActive = false;
+      pokemonList = [];
+      pokemonAttacks = [];
       waterLevel = 0;
       floatingMonsters = [];
 
@@ -5436,6 +5473,562 @@
       ctx.restore();
     }
 
+    // ===== POKEMON =====
+    let pokemonActive = false;
+    let pokemonTimer = 0;
+    const POKEMON_DURATION = 540; // ~9 seconds
+    let pokemonList = [];
+    let pokemonAttacks = []; // projectile-like attack effects
+
+    const POKEMON_DEFS = [
+      { name: 'Dracaufeu', type: 'fire', colors: ['#e87030','#f0a040','#ff6020'], wingColor: '#4488cc',
+        arriveFrom: 'sky', size: 28, spawnDelay: 0,
+        targetPos: () => ({ x: centerX, y: (centerY + 20) - houseH * 0.5 }), // roof
+        attackColor: 'rgba(255,120,0,1)', attackName: 'Flamethrower' },
+      { name: 'Rayquaza', type: 'dragon', colors: ['#2a8a3a','#40b050','#1a6a2a'], ringColor: '#ffcc00',
+        arriveFrom: 'sky', size: 22, spawnDelay: 15,
+        targetPos: () => ({ x: centerX - barrierRadius - 30, y: centerY - 40 }),
+        attackColor: 'rgba(0,255,100,1)', attackName: 'Dragon Ascent' },
+      { name: 'Kyurem', type: 'ice', colors: ['#7a8a9a','#90a0b0','#5a6a7a'], iceColor: '#80ccff',
+        arriveFrom: 'sky', size: 32, spawnDelay: 30,
+        targetPos: () => ({ x: centerX + barrierRadius + 40, y: centerY }),
+        attackColor: 'rgba(100,200,255,1)', attackName: 'Glaciate' },
+      { name: 'Trioxhydre', type: 'dark', colors: ['#2a2a5a','#3a3a7a','#1a1a4a'], headColor: '#6a4a8a',
+        arriveFrom: 'left', size: 26, spawnDelay: 50,
+        targetPos: () => ({ x: centerX - barrierRadius - 50, y: centerY + 40 }),
+        attackColor: 'rgba(120,50,180,1)', attackName: 'Dark Pulse' },
+      { name: 'Fulgulairo', type: 'electric', colors: ['#2a2a2a','#3a3a4a','#1a1a2a'], boltColor: '#ffdd00',
+        arriveFrom: 'sky', size: 18, spawnDelay: 65,
+        targetPos: () => ({ x: centerX + barrierRadius + 30, y: centerY - 60 }),
+        attackColor: 'rgba(255,220,0,1)', attackName: 'Electro Ball' },
+      { name: 'Rugit-Lune', type: 'dragon', colors: ['#1a2a5a','#2a3a6a','#0a1a3a'], wingColor: '#cc3333',
+        arriveFrom: 'sky', size: 30, spawnDelay: 80,
+        targetPos: () => ({ x: centerX - barrierRadius - 20, y: centerY + 80 }),
+        attackColor: 'rgba(200,50,50,1)', attackName: 'Dragon Claw' },
+      { name: 'Genesect', type: 'steel', colors: ['#6a3a8a','#8a5aaa','#4a2a6a'], cannonColor: '#ff4400',
+        arriveFrom: 'right', size: 20, spawnDelay: 100,
+        targetPos: () => ({ x: centerX + barrierRadius + 50, y: centerY + 60 }),
+        attackColor: 'rgba(255,80,0,1)', attackName: 'Techno Blast' }
+    ];
+
+    function triggerPokemon() {
+      if (pokemonActive) return;
+      pokemonActive = true;
+      pokemonTimer = 0;
+      pokemonList = [];
+      pokemonAttacks = [];
+      document.getElementById('btnPokemon').classList.add('pokemon-active');
+
+      // Pick 2 random pokemon
+      const shuffled = [...POKEMON_DEFS].sort(() => Math.random() - 0.5);
+      const picked = shuffled.slice(0, 2);
+      picked.forEach((def, idx) => {
+        const target = def.targetPos();
+        let startX, startY;
+        if (def.arriveFrom === 'sky') { startX = target.x + (Math.random()-0.5)*100; startY = -60; }
+        else if (def.arriveFrom === 'left') { startX = -60; startY = target.y; }
+        else { startX = W + 60; startY = target.y; }
+        def.spawnDelay = idx * 30; // stagger the 2
+
+        pokemonList.push({
+          def, x: startX, y: startY, targetX: target.x, targetY: target.y,
+          state: 'waiting', timer: 0, attackTimer: 0,
+          angle: 0, bobPhase: Math.random() * Math.PI * 2
+        });
+      });
+
+      // Epic Pokemon battle cry sound
+      try {
+        initAudio();
+        if (audioCtx) {
+          // Dramatic rising chord
+          [200, 300, 400, 500].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            osc.frequency.linearRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.5);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.08;
+            g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime + i * 0.1);
+            osc.stop(audioCtx.currentTime + 1);
+          });
+        }
+      } catch(e) {}
+    }
+
+    function updatePokemon(t) {
+      if (!pokemonActive) return;
+      pokemonTimer++;
+
+      for (const p of pokemonList) {
+        p.timer++;
+        p.bobPhase += 0.04;
+
+        if (p.state === 'waiting' && pokemonTimer >= p.def.spawnDelay) {
+          p.state = 'arriving';
+        }
+
+        if (p.state === 'arriving') {
+          p.x += (p.targetX - p.x) * 0.06;
+          p.y += (p.targetY - p.y) * 0.06;
+          if (Math.abs(p.x - p.targetX) < 3 && Math.abs(p.y - p.targetY) < 3) {
+            p.x = p.targetX; p.y = p.targetY;
+            p.state = 'idle';
+            // Arrival particles
+            for (let i = 0; i < 12; i++) {
+              impactParticles.push(new ImpactParticle(p.x + (Math.random()-0.5)*20, p.y + (Math.random()-0.5)*20, p.def.attackColor));
+            }
+          }
+        }
+
+        if ((p.state === 'idle' || p.state === 'attacking') && pokemonTimer < 420) {
+          // Hover bob
+          p.y = p.targetY + Math.sin(p.bobPhase) * 3;
+
+          // Attack every 35-50 frames
+          p.attackTimer++;
+          if (p.attackTimer > 35 + Math.random() * 15) {
+            p.attackTimer = 0;
+            // Find nearest monster
+            let closest = null, closestDist = Infinity;
+            for (const m of monsters) {
+              if (m.state !== 'approaching' && m.state !== 'idle') continue;
+              const dx = m.x - p.x, dy = m.y - p.y;
+              const d = Math.sqrt(dx*dx + dy*dy);
+              if (d < closestDist && d < 400) { closestDist = d; closest = m; }
+            }
+            if (closest) {
+              p.state = 'attacking';
+              p.angle = Math.atan2(closest.y - p.y, closest.x - p.x);
+              // Fire attack projectile
+              pokemonAttacks.push({
+                x: p.x, y: p.y,
+                vx: Math.cos(p.angle) * 8,
+                vy: Math.sin(p.angle) * 8,
+                color: p.def.attackColor,
+                type: p.def.type,
+                size: 5 + p.def.size * 0.15,
+                life: 60, trail: []
+              });
+              // Attack sound
+              try {
+                if (audioCtx) {
+                  const osc = audioCtx.createOscillator();
+                  osc.type = p.def.type === 'fire' ? 'sawtooth' : p.def.type === 'electric' ? 'square' : 'triangle';
+                  osc.frequency.value = p.def.type === 'ice' ? 600 : p.def.type === 'fire' ? 200 : 400;
+                  osc.frequency.linearRampToValueAtTime(osc.frequency.value * 2, audioCtx.currentTime + 0.15);
+                  const g = audioCtx.createGain();
+                  g.gain.value = 0.06;
+                  g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                  osc.connect(g); g.connect(audioCtx.destination);
+                  osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                }
+              } catch(e) {}
+            } else {
+              p.state = 'idle';
+            }
+          }
+        }
+
+        // Leave phase
+        if (pokemonTimer >= 420 && p.state !== 'leaving' && p.state !== 'waiting') {
+          p.state = 'leaving';
+        }
+        if (p.state === 'leaving') {
+          if (p.def.arriveFrom === 'sky') p.y -= 4;
+          else if (p.def.arriveFrom === 'left') p.x -= 5;
+          else p.x += 5;
+        }
+      }
+
+      // Update attack projectiles
+      for (let i = pokemonAttacks.length - 1; i >= 0; i--) {
+        const a = pokemonAttacks[i];
+        a.trail.push({ x: a.x, y: a.y, life: 1 });
+        if (a.trail.length > 8) a.trail.shift();
+        a.x += a.vx; a.y += a.vy;
+        a.life--;
+
+        // Hit monsters
+        for (let j = monsters.length - 1; j >= 0; j--) {
+          if (monsters[j].state !== 'approaching' && monsters[j].state !== 'idle') continue;
+          const dx = a.x - monsters[j].x, dy = a.y - monsters[j].y;
+          if (Math.sqrt(dx*dx + dy*dy) < monsters[j].size + a.size) {
+            monsters[j].state = 'hit';
+            monsters[j].hitTime = performance.now();
+            monsters[j].flyVx = a.vx * 0.5 + (Math.random()-0.5)*3;
+            monsters[j].flyVy = -6 - Math.random()*5;
+            monsters[j].flyRotSpeed = (Math.random()-0.5)*0.4;
+            monstersDefeated++;
+            document.getElementById('monsterCount').textContent = monstersDefeated;
+            shakeAmount = 5;
+            // Type-colored explosion
+            for (let p = 0; p < 20; p++) {
+              impactParticles.push(new ImpactParticle(a.x + (Math.random()-0.5)*15, a.y + (Math.random()-0.5)*15, a.color));
+            }
+            a.life = 0;
+            break;
+          }
+        }
+        // Decay trail
+        for (const tr of a.trail) tr.life -= 0.12;
+        if (a.life <= 0) pokemonAttacks.splice(i, 1);
+      }
+
+      // End
+      if (pokemonTimer >= POKEMON_DURATION && pokemonAttacks.length === 0) {
+        pokemonActive = false;
+        pokemonList = [];
+        document.getElementById('btnPokemon').classList.remove('pokemon-active');
+      }
+    }
+
+    function drawPokemon(t) {
+      if (!pokemonActive && pokemonAttacks.length === 0) return;
+      ctx.save();
+
+      for (const p of pokemonList) {
+        if (p.state === 'waiting') continue;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const s = p.def.size;
+        const [c1, c2, c3] = p.def.colors;
+        const bobY = Math.sin(p.bobPhase) * 2;
+
+        if (p.def.name === 'Dracaufeu') {
+          // Charizard: bipedal dragon, wings, tail flame
+          ctx.translate(0, bobY);
+          // Wings
+          ctx.fillStyle = p.def.wingColor;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.2, -s*0.3);
+          ctx.quadraticCurveTo(-s*1.0, -s*0.8, -s*1.1, -s*0.1);
+          ctx.lineTo(-s*0.3, -s*0.1);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(s*0.2, -s*0.3);
+          ctx.quadraticCurveTo(s*1.0, -s*0.8, s*1.1, -s*0.1);
+          ctx.lineTo(s*0.3, -s*0.1);
+          ctx.fill();
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.4, s*0.5, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Head
+          ctx.beginPath();
+          ctx.arc(0, -s*0.55, s*0.25, 0, Math.PI*2);
+          ctx.fill();
+          // Belly
+          ctx.fillStyle = '#f0c870';
+          ctx.beginPath();
+          ctx.ellipse(0, s*0.1, s*0.25, s*0.3, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Eyes
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(-s*0.1, -s*0.58, s*0.06, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.1, -s*0.58, s*0.06, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#222';
+          ctx.beginPath(); ctx.arc(-s*0.08, -s*0.58, s*0.03, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.12, -s*0.58, s*0.03, 0, Math.PI*2); ctx.fill();
+          // Horns
+          ctx.fillStyle = c3;
+          ctx.beginPath(); ctx.moveTo(-s*0.15, -s*0.75); ctx.lineTo(-s*0.25, -s*0.95); ctx.lineTo(-s*0.05, -s*0.78); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(s*0.15, -s*0.75); ctx.lineTo(s*0.25, -s*0.95); ctx.lineTo(s*0.05, -s*0.78); ctx.fill();
+          // Tail flame
+          ctx.fillStyle = '#ff4400';
+          const flicker = Math.sin(t*0.02)*3;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.1, s*0.5);
+          ctx.quadraticCurveTo(-s*0.5, s*0.8+flicker, -s*0.3, s*1.0+flicker);
+          ctx.quadraticCurveTo(-s*0.15, s*0.7, -s*0.1, s*0.5);
+          ctx.fill();
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath();
+          ctx.moveTo(-s*0.1, s*0.5);
+          ctx.quadraticCurveTo(-s*0.35, s*0.7+flicker*0.5, -s*0.25, s*0.85+flicker*0.5);
+          ctx.quadraticCurveTo(-s*0.15, s*0.65, -s*0.1, s*0.5);
+          ctx.fill();
+
+        } else if (p.def.name === 'Rayquaza') {
+          // Serpentine dragon, green with yellow rings
+          ctx.translate(0, bobY);
+          const segs = 10;
+          for (let i = 0; i < segs; i++) {
+            const seg = i / segs;
+            const sx = Math.sin(seg*Math.PI*3 + t*0.005)*s*0.3;
+            const sy = seg*s*1.5 - s*0.5;
+            const sr = s*(0.2 - seg*0.01);
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(1,sr), 0, Math.PI*2);
+            ctx.fillStyle = i%3===0 ? p.def.ringColor : c1;
+            ctx.fill();
+          }
+          // Head
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.arc(Math.sin(t*0.005)*s*0.3, -s*0.5, s*0.3, 0, Math.PI*2);
+          ctx.fill();
+          // Eyes (red)
+          ctx.fillStyle = '#ff2200';
+          ctx.beginPath(); ctx.arc(Math.sin(t*0.005)*s*0.3 - s*0.1, -s*0.55, s*0.06, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(Math.sin(t*0.005)*s*0.3 + s*0.1, -s*0.55, s*0.06, 0, Math.PI*2); ctx.fill();
+          // Fins
+          ctx.fillStyle = '#cc3300';
+          ctx.beginPath();
+          ctx.moveTo(Math.sin(t*0.005)*s*0.3, -s*0.75);
+          ctx.lineTo(Math.sin(t*0.005)*s*0.3 - s*0.15, -s*1.0);
+          ctx.lineTo(Math.sin(t*0.005)*s*0.3 + s*0.15, -s*1.0);
+          ctx.fill();
+
+        } else if (p.def.name === 'Kyurem') {
+          // Massive ice dragon
+          ctx.translate(0, bobY);
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.5, s*0.6, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Ice wings
+          ctx.fillStyle = p.def.iceColor;
+          ctx.globalAlpha = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.3, -s*0.2);
+          ctx.lineTo(-s*1.2, -s*0.5);
+          ctx.lineTo(-s*1.0, s*0.1);
+          ctx.lineTo(-s*0.3, 0);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(s*0.3, -s*0.2);
+          ctx.lineTo(s*1.2, -s*0.5);
+          ctx.lineTo(s*1.0, s*0.1);
+          ctx.lineTo(s*0.3, 0);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          // Head
+          ctx.fillStyle = p.def.iceColor;
+          ctx.beginPath();
+          ctx.arc(0, -s*0.55, s*0.28, 0, Math.PI*2);
+          ctx.fill();
+          // Yellow eyes
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath(); ctx.arc(-s*0.1, -s*0.58, s*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.1, -s*0.58, s*0.07, 0, Math.PI*2); ctx.fill();
+          // Ice crest
+          ctx.fillStyle = '#aaddff';
+          ctx.beginPath();
+          ctx.moveTo(0, -s*0.8); ctx.lineTo(-s*0.15, -s*1.1); ctx.lineTo(s*0.15, -s*1.1);
+          ctx.fill();
+
+        } else if (p.def.name === 'Trioxhydre') {
+          // 3-headed dark dragon, levitating
+          ctx.translate(0, bobY);
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.35, s*0.45, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Wings (6 small)
+          ctx.fillStyle = c3;
+          for (let w = 0; w < 3; w++) {
+            const wa = -0.8 + w*0.4;
+            ctx.beginPath();
+            ctx.moveTo(-s*0.3, -s*0.1 + w*s*0.1);
+            ctx.lineTo(-s*0.8, -s*0.3 + w*s*0.1);
+            ctx.lineTo(-s*0.5, s*0.05 + w*s*0.1);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(s*0.3, -s*0.1 + w*s*0.1);
+            ctx.lineTo(s*0.8, -s*0.3 + w*s*0.1);
+            ctx.lineTo(s*0.5, s*0.05 + w*s*0.1);
+            ctx.fill();
+          }
+          // 3 heads
+          const heads = [[-s*0.35, -s*0.5], [0, -s*0.65], [s*0.35, -s*0.5]];
+          heads.forEach(([hx, hy]) => {
+            ctx.fillStyle = c2;
+            ctx.beginPath(); ctx.arc(hx, hy, s*0.18, 0, Math.PI*2); ctx.fill();
+            // Red eye markings
+            ctx.fillStyle = '#cc2244';
+            ctx.beginPath(); ctx.arc(hx, hy - s*0.03, s*0.06, 0, Math.PI*2); ctx.fill();
+          });
+          // Purple crest on main head
+          ctx.fillStyle = p.def.headColor;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.1, -s*0.8); ctx.lineTo(0, -s*1.0); ctx.lineTo(s*0.1, -s*0.8);
+          ctx.fill();
+
+        } else if (p.def.name === 'Fulgulairo') {
+          // Electric seabird
+          ctx.translate(0, bobY * 1.5);
+          // Wings spread
+          const wingFlap = Math.sin(t*0.008)*0.2;
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(-s*0.6, -s*0.5 + wingFlap*s, -s*1.2, -s*0.3 + wingFlap*s);
+          ctx.lineTo(-s*0.8, s*0.1);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(s*0.6, -s*0.5 + wingFlap*s, s*1.2, -s*0.3 + wingFlap*s);
+          ctx.lineTo(s*0.8, s*0.1);
+          ctx.fill();
+          // Yellow wing tips
+          ctx.fillStyle = p.def.boltColor;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.9, -s*0.2 + wingFlap*s); ctx.lineTo(-s*1.2, -s*0.3 + wingFlap*s); ctx.lineTo(-s*0.8, s*0.1);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(s*0.9, -s*0.2 + wingFlap*s); ctx.lineTo(s*1.2, -s*0.3 + wingFlap*s); ctx.lineTo(s*0.8, s*0.1);
+          ctx.fill();
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.2, s*0.35, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Head
+          ctx.beginPath(); ctx.arc(0, -s*0.35, s*0.15, 0, Math.PI*2); ctx.fill();
+          // Yellow throat
+          ctx.fillStyle = p.def.boltColor;
+          ctx.beginPath(); ctx.ellipse(0, -s*0.2, s*0.08, s*0.12, 0, 0, Math.PI*2); ctx.fill();
+          // Beak
+          ctx.fillStyle = '#cc8800';
+          ctx.beginPath(); ctx.moveTo(0, -s*0.42); ctx.lineTo(s*0.05, -s*0.55); ctx.lineTo(-s*0.05, -s*0.42); ctx.fill();
+
+        } else if (p.def.name === 'Rugit-Lune') {
+          // Roaring Moon - quadrupedal dragon with crescent wings
+          ctx.translate(0, bobY);
+          // Crescent wings
+          ctx.fillStyle = p.def.wingColor;
+          ctx.beginPath();
+          ctx.moveTo(-s*0.3, -s*0.1);
+          ctx.quadraticCurveTo(-s*1.0, -s*0.9, -s*0.5, -s*0.1);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(s*0.3, -s*0.1);
+          ctx.quadraticCurveTo(s*1.0, -s*0.9, s*0.5, -s*0.1);
+          ctx.fill();
+          // Body
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.45, s*0.35, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Red underside
+          ctx.fillStyle = '#cc3333';
+          ctx.beginPath();
+          ctx.ellipse(0, s*0.1, s*0.3, s*0.2, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Head with spikes
+          ctx.fillStyle = c1;
+          ctx.beginPath(); ctx.arc(0, -s*0.4, s*0.22, 0, Math.PI*2); ctx.fill();
+          // Light blue head spikes
+          ctx.fillStyle = '#6699cc';
+          for (let sp = 0; sp < 3; sp++) {
+            ctx.beginPath();
+            ctx.moveTo(-s*0.1 + sp*s*0.1, -s*0.55);
+            ctx.lineTo(-s*0.05 + sp*s*0.1, -s*0.8);
+            ctx.lineTo(sp*s*0.1, -s*0.55);
+            ctx.fill();
+          }
+          // Eyes
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath(); ctx.arc(-s*0.08, -s*0.43, s*0.05, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.08, -s*0.43, s*0.05, 0, Math.PI*2); ctx.fill();
+          // Tail
+          ctx.strokeStyle = c1;
+          ctx.lineWidth = s*0.08;
+          ctx.beginPath();
+          ctx.moveTo(0, s*0.3);
+          ctx.quadraticCurveTo(s*0.3, s*0.7, s*0.1, s*0.9);
+          ctx.stroke();
+          ctx.fillStyle = '#cc3333';
+          ctx.beginPath(); ctx.arc(s*0.1, s*0.9, s*0.06, 0, Math.PI*2); ctx.fill();
+
+        } else if (p.def.name === 'Genesect') {
+          // Bug/Steel mech insect with cannon
+          ctx.translate(0, bobY);
+          // Saucer-shaped head
+          ctx.fillStyle = c1;
+          ctx.beginPath();
+          ctx.ellipse(0, -s*0.3, s*0.35, s*0.15, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Body
+          ctx.fillStyle = c2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, s*0.25, s*0.4, 0, 0, Math.PI*2);
+          ctx.fill();
+          // Steel plating
+          ctx.strokeStyle = '#999';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(0, -s*0.05, s*0.2, s*0.3, 0, 0, Math.PI*2);
+          ctx.stroke();
+          // Red eyes
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath(); ctx.arc(-s*0.12, -s*0.32, s*0.05, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.12, -s*0.32, s*0.05, 0, Math.PI*2); ctx.fill();
+          // Back cannon
+          ctx.fillStyle = '#888';
+          ctx.fillRect(-s*0.06, -s*0.6, s*0.12, s*0.25);
+          // Cannon tip glow
+          ctx.fillStyle = p.def.cannonColor;
+          ctx.beginPath(); ctx.arc(0, -s*0.6, s*0.08, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath(); ctx.arc(0, -s*0.6, s*0.04, 0, Math.PI*2); ctx.fill();
+          // Legs
+          ctx.strokeStyle = c1;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(-s*0.15, s*0.3); ctx.lineTo(-s*0.3, s*0.6); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(s*0.15, s*0.3); ctx.lineTo(s*0.3, s*0.6); ctx.stroke();
+          // Metal teeth grin
+          ctx.fillStyle = '#ddd';
+          ctx.fillRect(-s*0.1, -s*0.22, s*0.2, s*0.04);
+        }
+
+        // Name label
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = `${Math.max(7, s*0.3)}px Orbitron, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(p.def.name, 0, s*0.8 + 12);
+
+        ctx.restore();
+      }
+
+      // Draw attack projectiles
+      for (const a of pokemonAttacks) {
+        // Trail
+        for (const tr of a.trail) {
+          if (tr.life <= 0) continue;
+          ctx.save();
+          ctx.globalAlpha = tr.life * 0.5;
+          ctx.beginPath();
+          ctx.arc(tr.x, tr.y, Math.max(1, a.size * tr.life * 0.7), 0, Math.PI*2);
+          ctx.fillStyle = a.color;
+          ctx.fill();
+          ctx.restore();
+        }
+        // Main projectile
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, Math.max(1, a.size), 0, Math.PI*2);
+        ctx.fillStyle = a.color;
+        ctx.shadowColor = a.color;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        // White core
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, Math.max(1, a.size*0.4), 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     // ===== TORNADE =====
     let tornadoActive = false;
     let tornadoTimer = 0;
@@ -5912,6 +6505,7 @@
     document.getElementById('btnFishWave').style.display = 'none';
     document.getElementById('btnSharkWave').style.display = 'none';
     document.getElementById('btnTornado').style.display = 'none';
+    document.getElementById('btnPokemon').style.display = 'none';
 
     // Element selector - click handler with sound feedback
     function playToggleSound(on) {
@@ -6314,6 +6908,8 @@
       updateFishWave(t);
       // Shark wave
       updateSharkWave(t);
+      // Pokemon
+      updatePokemon(t);
       // Tornado
       updateTornado(t);
 
@@ -6382,6 +6978,8 @@
       // Shark wave (drawn over everything, with surf waves)
       drawSharkWave(t);
 
+      // Pokemon (drawn on top)
+      drawPokemon(t);
       // Tornado (drawn on top)
       drawTornado(t);
       // Lightning storm (drawn on top of everything)
