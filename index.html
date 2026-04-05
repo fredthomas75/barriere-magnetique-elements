@@ -242,6 +242,9 @@
     // Death lights array (colored point lights at monster death positions)
     const deathLights = [];
 
+    // Weather data (must be declared before updateSky which uses it)
+    let weather = { cloudCover: 0, weatherCode: 0 };
+
     // ===== SKY SYSTEM =====
     scene.background = null;
 
@@ -2915,6 +2918,7 @@
 
     function animate() {
       requestAnimationFrame(animate);
+      try {
       const t = clock.getElapsedTime();
       const dt = clock.getDelta();
 
@@ -3152,12 +3156,12 @@
       controls.update();
 
       renderer.render(scene, camera);
+      } catch(e) { console.error('animate error:', e); }
     }
 
     animate();
 
     // ===== WEATHER =====
-    let weather = { cloudCover: 0, weatherCode: 0 };
     async function fetchWeather() {
       try {
         const resp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=45.5017&longitude=-73.5673&current=weather_code,cloud_cover');
