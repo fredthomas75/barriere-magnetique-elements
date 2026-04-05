@@ -982,10 +982,11 @@
       });
 
       // Door position (drawn after ground)
-      const doorW = hw * 0.14;
-      const doorH = hh * 0.28;
+      const doorW = hw * 0.12;
+      const doorH = hh * 0.3;
       const doorX = hx - doorW / 2;
-      const doorY = hy + hh * 0.7 - doorH;
+      const facadeBottom = hy - hh / 3 + hh * 0.7; // bottom edge of house facade
+      const doorY = facadeBottom - doorH;
 
       // Ground / lawn — brighter during day (must be drawn before door)
       const groundGrad = ctx.createLinearGradient(0, hy + hh * 0.37, 0, H);
