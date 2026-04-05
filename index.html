@@ -151,12 +151,13 @@
 
   <script type="module">
     import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // ===== SCENE SETUP =====
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 8, 22);
-    camera.lookAt(0, 2, 0);
+    camera.position.set(0, 10, 24);
+    camera.lookAt(0, 3, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -166,6 +167,20 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     document.body.insertBefore(renderer.domElement, document.getElementById('overlay'));
+
+    // ===== ORBIT CONTROLS — navigate around the scene =====
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 3, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 10;
+    controls.maxDistance = 50;
+    controls.minPolarAngle = 0.2;
+    controls.maxPolarAngle = Math.PI / 2.1; // don't go below ground
+    controls.enablePan = true;
+    controls.panSpeed = 0.5;
+    controls.rotateSpeed = 0.6;
+    controls.update();
 
     // ===== MONTREAL TIME =====
     function getMontrealTime() {
@@ -836,34 +851,96 @@
       });
     };
 
+    let cobraHeadAngle = 0;
+    let cobraStriking = false;
+    let cobraStrikeTarget = null;
+
     function updateCobra(t) {
       if (!cobraActive) return;
       cobraTimer++;
-      const orbitAngle = t * 0.8;
+      if (cobraSegments.length === 0) return;
+      const head = cobraSegments[0];
       const orbitR = 10.5;
-      // Head position — orbit outside barrier
-      const hx = Math.cos(orbitAngle) * orbitR;
-      const hz = Math.sin(orbitAngle) * orbitR;
-      const hy = 2 + Math.sin(t * 2) * 0.5;
+      const hy = 1.5 + Math.sin(t * 1.5) * 0.4;
 
-      if (cobraSegments.length > 0) {
-        cobraSegments[0].position.set(hx, hy, hz);
-        cobraSegments[0].lookAt(0, hy, 0);
-        // Body follows head with delay
-        for (let i = 1; i < cobraSegments.length; i++) {
-          const prev = cobraSegments[i-1].position;
-          const curr = cobraSegments[i].position;
-          curr.lerp(prev, 0.15);
-          curr.y = hy - i * 0.05 + Math.sin(t * 3 + i * 0.5) * 0.15;
+      // Hunt: find nearest approaching monster
+      let closest = null, closestDist = Infinity;
+      for (const m of monsters) {
+        if (m.userData.state !== 'approaching') continue;
+        const d = head.position.distanceTo(m.position);
+        if (d < closestDist) { closestDist = d; closest = m; }
+      }
+
+      // Validate strike target
+      if (cobraStriking && cobraStrikeTarget) {
+        if (!monsters.includes(cobraStrikeTarget) || cobraStrikeTarget.userData.state !== 'approaching') {
+          cobraStriking = false; cobraStrikeTarget = null;
         }
       }
 
-      // Bite nearby monsters
-      for (const m of monsters) {
-        if (m.userData.state !== 'approaching') continue;
-        if (cobraSegments.length && cobraSegments[0].position.distanceTo(m.position) < 1.5) {
-          killMonster(m, t);
+      if (!cobraStriking && closest && closestDist < 8) {
+        // Start strike — lunge toward monster
+        cobraStriking = true;
+        cobraStrikeTarget = closest;
+      }
+
+      if (cobraStriking && cobraStrikeTarget) {
+        // Smooth turn + lunge toward target
+        const toTarget = cobraStrikeTarget.position.clone().sub(head.position);
+        toTarget.y = 0;
+        const targetAngle = Math.atan2(toTarget.x, toTarget.z);
+        let angleDiff = targetAngle - cobraHeadAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        cobraHeadAngle += angleDiff * 0.15; // smooth turn
+
+        const speed = closestDist > 2 ? 0.2 : 0.05;
+        head.position.x += Math.sin(cobraHeadAngle) * speed;
+        head.position.z += Math.cos(cobraHeadAngle) * speed;
+        head.position.y = hy;
+
+        // Bite!
+        if (head.position.distanceTo(cobraStrikeTarget.position) < 1.5) {
+          killMonster(cobraStrikeTarget, t);
+          cobraStriking = false;
+          cobraStrikeTarget = null;
         }
+      } else {
+        // Smooth orbital patrol — like 2D version
+        const orbitAngle = Math.atan2(head.position.x, head.position.z);
+        const currentR = Math.sqrt(head.position.x**2 + head.position.z**2);
+        // Tangent direction + distance correction
+        const tangent = orbitAngle + Math.PI * 0.5;
+        const distError = currentR - orbitR;
+        const desiredAngle = tangent + distError * 0.05 + Math.sin(t * 0.8) * 0.1;
+        // Smooth turn
+        let angleDiff = desiredAngle - cobraHeadAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        cobraHeadAngle += angleDiff * 0.04;
+
+        head.position.x += Math.sin(cobraHeadAngle) * 0.1;
+        head.position.z += Math.cos(cobraHeadAngle) * 0.1;
+        head.position.y = hy;
+        cobraStriking = false;
+      }
+
+      // Head looks in movement direction
+      head.lookAt(head.position.x + Math.sin(cobraHeadAngle), hy, head.position.z + Math.cos(cobraHeadAngle));
+
+      // Body follows head with smooth delay (serpentine)
+      for (let i = 1; i < cobraSegments.length; i++) {
+        const prev = cobraSegments[i-1].position;
+        const curr = cobraSegments[i].position;
+        const dir = prev.clone().sub(curr);
+        const dist = dir.length();
+        if (dist > 0.4) { // maintain spacing
+          dir.normalize();
+          curr.add(dir.multiplyScalar((dist - 0.35) * 0.3));
+        }
+        curr.y = hy - i * 0.04 + Math.sin(t * 2.5 + i * 0.6) * 0.12;
+        // Segments look at their predecessor
+        cobraSegments[i].lookAt(prev);
       }
 
       if (cobraTimer > 480) {
@@ -1116,7 +1193,10 @@
         const sd = shark.userData;
         if (sd.biteTimer > 0) { sd.biteTimer--; continue; }
 
-        // Hunt monsters
+        // Initialize heading if needed
+        if (sd.heading === undefined) sd.heading = sd.angle;
+
+        // Hunt monsters — smooth turn toward target
         if (!sd.target || sd.target.userData?.state !== 'approaching') {
           sd.target = null;
           let closest = null, cDist = Infinity;
@@ -1129,24 +1209,51 @@
         }
 
         if (sd.target) {
-          const dir = sd.target.position.clone().sub(shark.position);
-          dir.y = 0;
-          dir.normalize();
-          shark.position.add(dir.multiplyScalar(sd.speed * 2));
-          shark.lookAt(shark.position.clone().add(dir));
-          if (shark.position.distanceTo(sd.target.position) < 2) {
+          // Smooth turn towards prey (like 2D version)
+          const dx = sd.target.position.x - shark.position.x;
+          const dz = sd.target.position.z - shark.position.z;
+          const targetAngle = Math.atan2(dx, dz);
+          let angleDiff = targetAngle - sd.heading;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          const dist = Math.sqrt(dx*dx + dz*dz);
+          const turnRate = dist < 4 ? 0.12 : 0.06;
+          sd.heading += angleDiff * turnRate;
+          const huntSpeed = dist < 3 ? sd.speed * 2.5 : sd.speed * 1.8;
+          shark.position.x += Math.sin(sd.heading) * huntSpeed;
+          shark.position.z += Math.cos(sd.heading) * huntSpeed;
+
+          if (dist < 2) {
             killMonster(sd.target, t);
             sd.target = null;
-            sd.biteTimer = 30;
+            sd.biteTimer = 40;
           }
         } else {
-          sd.angle += 0.015;
-          const r = 12;
-          shark.position.x = Math.cos(sd.angle) * r;
-          shark.position.z = Math.sin(sd.angle) * r;
-          shark.lookAt(new THREE.Vector3(Math.cos(sd.angle + 0.1) * r, 0.3, Math.sin(sd.angle + 0.1) * r));
+          // Smooth orbital patrol (like 2D version)
+          const orbitR = 12;
+          const sx = shark.position.x, sz = shark.position.z;
+          const currentR = Math.sqrt(sx*sx + sz*sz);
+          const orbitAngle = Math.atan2(sx, sz);
+          const tangent = orbitAngle + Math.PI * 0.5;
+          const distError = currentR - orbitR;
+          const desiredAngle = tangent + distError * 0.008 + Math.sin(t * 0.5 + sharkObjs.indexOf(shark)) * 0.1;
+          let angleDiff = desiredAngle - sd.heading;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          sd.heading += angleDiff * 0.04;
+          const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + sharkObjs.indexOf(shark)) * 0.15);
+          shark.position.x += Math.sin(sd.heading) * swimSpeed;
+          shark.position.z += Math.cos(sd.heading) * swimSpeed;
         }
-        shark.position.y = 0.3 + Math.sin(t * 2 + sharkObjs.indexOf(shark)) * 0.2;
+
+        shark.position.y = 0.3 + Math.sin(t * 1.8 + sharkObjs.indexOf(shark) * 1.5) * 0.2;
+        // Smooth lookAt using heading
+        const lookTarget = new THREE.Vector3(
+          shark.position.x + Math.sin(sd.heading) * 2,
+          shark.position.y,
+          shark.position.z + Math.cos(sd.heading) * 2
+        );
+        shark.lookAt(lookTarget);
       }
 
       if (sharkWaveTimer > 600) {
@@ -1816,11 +1923,8 @@
       updatePokemon(t);
       updateMetalWave(t);
 
-      // More cinematic camera sway (increased amplitude)
-      camera.position.x = Math.sin(t * 0.1) * 1.2 + Math.cos(t * 0.07) * 0.4;
-      camera.position.y = 8 + Math.sin(t * 0.15) * 0.6;
-      camera.position.z = 22 + Math.sin(t * 0.08) * 0.5;
-      camera.lookAt(0, 2.5, 0);
+      // OrbitControls damping update
+      controls.update();
 
       renderer.render(scene, camera);
     }
