@@ -1100,7 +1100,7 @@
 
       // Spawn position (random point far away)
       const spawnAngle = Math.random() * Math.PI * 2;
-      const spawnDist = 30 + Math.random() * 10;
+      const spawnDist = 18 + Math.random() * 6;
       group.position.set(
         Math.cos(spawnAngle) * spawnDist,
         1 + Math.random() * 2,
@@ -1109,7 +1109,7 @@
 
       group.userData = {
         state: 'approaching',
-        speed: 0.015 + Math.random() * 0.01,
+        speed: 0.025 + Math.random() * 0.015,
         size,
         wobblePhase: Math.random() * Math.PI * 2,
         flyVel: new THREE.Vector3(),
@@ -1485,7 +1485,7 @@
         fGroup.add(tail);
 
         const angle = Math.random() * Math.PI * 2;
-        fGroup.position.set(Math.cos(angle) * 12, 0.3, Math.sin(angle) * 12);
+        fGroup.position.set(Math.cos(angle) * 11, 0.3, Math.sin(angle) * 11);
         fGroup.userData = { speed: 0.04 + Math.random() * 0.03, angle, hunting: false, target: null };
         scene.add(fGroup);
         fishObjs.push(fGroup);
@@ -1509,6 +1509,8 @@
       // Fish hunt monsters
       for (const fish of fishObjs) {
         const fd = fish.userData;
+        if (fd.heading === undefined) fd.heading = fd.angle;
+
         // Find target
         if (!fd.target || fd.target.userData?.state !== 'approaching') {
           fd.target = null;
@@ -1522,18 +1524,42 @@
         }
 
         if (fd.target) {
-          const dir = fd.target.position.clone().sub(fish.position).normalize();
-          fish.position.add(dir.multiplyScalar(fd.speed * 1.5));
-          fish.lookAt(fd.target.position);
-          if (fish.position.distanceTo(fd.target.position) < 1) {
+          // Smooth turn toward target
+          const dx = fd.target.position.x - fish.position.x;
+          const dz = fd.target.position.z - fish.position.z;
+          const targetAngle = Math.atan2(dx, dz);
+          let angleDiff = targetAngle - fd.heading;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          fd.heading += angleDiff * 0.1;
+          fish.position.x += Math.sin(fd.heading) * fd.speed * 1.8;
+          fish.position.z += Math.cos(fd.heading) * fd.speed * 1.8;
+          if (fish.position.distanceTo(fd.target.position) < 1.2) {
             killMonster(fd.target, t);
             fd.target = null;
           }
         } else {
-          fd.angle += 0.02;
-          fish.position.x += Math.cos(fd.angle) * fd.speed;
-          fish.position.z += Math.sin(fd.angle) * fd.speed;
+          // Orbital patrol — stay at radius ~11 around house
+          const orbitR = 11;
+          const fx = fish.position.x, fz = fish.position.z;
+          const currentR = Math.sqrt(fx*fx + fz*fz);
+          const orbitAngle = Math.atan2(fx, fz);
+          const tangent = orbitAngle + Math.PI * 0.5;
+          const distError = currentR - orbitR;
+          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.8 + fishObjs.indexOf(fish) * 2) * 0.15;
+          let angleDiff = desiredAngle - fd.heading;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          fd.heading += angleDiff * 0.06;
+          fish.position.x += Math.sin(fd.heading) * fd.speed;
+          fish.position.z += Math.cos(fd.heading) * fd.speed;
         }
+        // Smooth lookAt
+        const lookTarget = new THREE.Vector3(
+          fish.position.x + Math.sin(fd.heading) * 2, fish.position.y,
+          fish.position.z + Math.cos(fd.heading) * 2
+        );
+        fish.lookAt(lookTarget);
         fish.position.y = 0.3 + Math.sin(t * 3 + fishObjs.indexOf(fish)) * 0.15;
       }
 
@@ -1602,7 +1628,7 @@
         });
 
         const angle = Math.random() * Math.PI * 2;
-        sGroup.position.set(Math.cos(angle) * 13, 0.3, Math.sin(angle) * 13);
+        sGroup.position.set(Math.cos(angle) * 12, 0.3, Math.sin(angle) * 12);
         sGroup.userData = { speed: 0.06 + Math.random() * 0.03, angle, target: null, biteTimer: 0 };
         scene.add(sGroup);
         sharkObjs.push(sGroup);
@@ -1660,18 +1686,24 @@
             sd.biteTimer = 40;
           }
         } else {
-          // Smooth orbital patrol (like 2D version)
+          // Smooth orbital patrol — strong distance correction to stay in view
           const orbitR = 12;
           const sx = shark.position.x, sz = shark.position.z;
           const currentR = Math.sqrt(sx*sx + sz*sz);
           const orbitAngle = Math.atan2(sx, sz);
           const tangent = orbitAngle + Math.PI * 0.5;
           const distError = currentR - orbitR;
-          const desiredAngle = tangent + distError * 0.008 + Math.sin(t * 0.5 + sharkObjs.indexOf(shark)) * 0.1;
+          // Strong correction: 0.03 per unit of error (was 0.008)
+          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.5 + sharkObjs.indexOf(shark) * 2) * 0.1;
           let angleDiff = desiredAngle - sd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          sd.heading += angleDiff * 0.04;
+          sd.heading += angleDiff * 0.06;
+          // Hard clamp: if too far out, force back toward orbit
+          if (currentR > orbitR + 5) {
+            const inward = Math.atan2(-sx, -sz);
+            sd.heading = inward + Math.PI * 0.3; // angle back inward
+          }
           const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + sharkObjs.indexOf(shark)) * 0.15);
           shark.position.x += Math.sin(sd.heading) * swimSpeed;
           shark.position.z += Math.cos(sd.heading) * swimSpeed;
