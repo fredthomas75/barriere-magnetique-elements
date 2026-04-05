@@ -1455,38 +1455,97 @@
     window.triggerFishWave = function() {
       if (fishWaveActive) return;
       fishWaveActive = true; fishWaveTimer = 0;
-      // Create water plane
+      // Create water plane with emissive glow for night visibility
       const wGeo = new THREE.CircleGeometry(25, 64);
       const wMat = new THREE.MeshStandardMaterial({
-        color: 0x1166aa, transparent: true, opacity: 0, roughness: 0.2, metalness: 0.3
+        color: 0x1166aa, transparent: true, opacity: 0, roughness: 0.2, metalness: 0.3,
+        emissive: 0x112244, emissiveIntensity: 0.15
       });
       waterPlane = new THREE.Mesh(wGeo, wMat);
       waterPlane.rotation.x = -Math.PI / 2;
       waterPlane.position.y = 0.05;
       scene.add(waterPlane);
 
-      // Spawn fish
+      // Spawn detailed fish
       fishObjs.forEach(f => scene.remove(f));
       fishObjs = [];
       for (let i = 0; i < 6; i++) {
         const fGroup = new THREE.Group();
-        const body = new THREE.Mesh(
-          new THREE.SphereGeometry(0.3, 8, 6),
-          new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5) })
-        );
-        body.scale.set(1.5, 0.8, 0.8);
+        const fishColor = new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
+        const fishMat = new THREE.MeshStandardMaterial({
+          color: fishColor, roughness: 0.4, metalness: 0.3,
+          emissive: fishColor, emissiveIntensity: 0.2
+        });
+
+        // Oval body
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), fishMat);
+        body.scale.set(1.8, 0.9, 0.7);
         fGroup.add(body);
-        // Tail
-        const tail = new THREE.Mesh(
-          new THREE.ConeGeometry(0.2, 0.4, 4),
-          body.material
-        );
-        tail.position.x = -0.5; tail.rotation.z = Math.PI / 2;
-        fGroup.add(tail);
+
+        // Fan-shaped tail (two overlapping planes)
+        const tailShape = new THREE.Shape();
+        tailShape.moveTo(0, 0);
+        tailShape.lineTo(-0.3, 0.25);
+        tailShape.lineTo(-0.35, 0);
+        tailShape.lineTo(-0.3, -0.25);
+        tailShape.closePath();
+        const tailGeo = new THREE.ShapeGeometry(tailShape);
+        const tail1 = new THREE.Mesh(tailGeo, fishMat);
+        tail1.position.set(-0.55, 0, 0);
+        tail1.rotation.y = 0.15;
+        fGroup.add(tail1);
+        const tail2 = new THREE.Mesh(tailGeo, fishMat);
+        tail2.position.set(-0.55, 0, 0);
+        tail2.rotation.y = -0.15;
+        fGroup.add(tail2);
+
+        // Dorsal fin on top (triangle)
+        const dorsalShape = new THREE.Shape();
+        dorsalShape.moveTo(0.1, 0);
+        dorsalShape.lineTo(0, 0.2);
+        dorsalShape.lineTo(-0.15, 0);
+        dorsalShape.closePath();
+        const dorsalGeo = new THREE.ShapeGeometry(dorsalShape);
+        const dorsal = new THREE.Mesh(dorsalGeo, fishMat);
+        dorsal.position.set(0, 0.25, 0);
+        dorsal.rotation.y = Math.PI / 2;
+        fGroup.add(dorsal);
+
+        // Pectoral fins (tiny planes on sides)
+        [-1, 1].forEach(side => {
+          const pFinShape = new THREE.Shape();
+          pFinShape.moveTo(0, 0);
+          pFinShape.lineTo(-0.12, -0.08 * side);
+          pFinShape.lineTo(-0.08, 0);
+          pFinShape.closePath();
+          const pFinGeo = new THREE.ShapeGeometry(pFinShape);
+          const pFin = new THREE.Mesh(pFinGeo, fishMat);
+          pFin.position.set(0.05, -0.05, side * 0.2);
+          pFin.rotation.x = side * 0.4;
+          fGroup.add(pFin);
+        });
+
+        // Eyes on each side
+        const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        [-1, 1].forEach(side => {
+          const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), eyeWhiteMat);
+          eyeWhite.position.set(0.25, 0.08, side * 0.19);
+          fGroup.add(eyeWhite);
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyePupilMat);
+          pupil.position.set(0.27, 0.08, side * 0.21);
+          fGroup.add(pupil);
+        });
+
+        // Self-illumination PointLight for night visibility
+        const fishLight = new THREE.PointLight(fishColor, 0.4, 4);
+        fishLight.position.set(0, 0.1, 0);
+        fGroup.add(fishLight);
 
         const angle = Math.random() * Math.PI * 2;
-        fGroup.position.set(Math.cos(angle) * 11, 0.3, Math.sin(angle) * 11);
-        fGroup.userData = { speed: 0.04 + Math.random() * 0.03, angle, hunting: false, target: null };
+        const orbitOffset = (Math.random() - 0.5) * 3; // vary orbit radius per fish
+        fGroup.position.set(Math.cos(angle) * (11 + orbitOffset), 0.3, Math.sin(angle) * (11 + orbitOffset));
+        fGroup.userData = { speed: 0.04 + Math.random() * 0.03, angle, hunting: false, target: null, orbitOffset, tailGroup: fGroup, idx: i };
         scene.add(fGroup);
         fishObjs.push(fGroup);
       }
@@ -1507,7 +1566,8 @@
       }
 
       // Fish hunt monsters
-      for (const fish of fishObjs) {
+      for (let fi = 0; fi < fishObjs.length; fi++) {
+        const fish = fishObjs[fi];
         const fd = fish.userData;
         if (fd.heading === undefined) fd.heading = fd.angle;
 
@@ -1523,6 +1583,7 @@
           fd.target = closest;
         }
 
+        let angleDiffAbs = 0;
         if (fd.target) {
           // Smooth turn toward target
           const dx = fd.target.position.x - fish.position.x;
@@ -1531,6 +1592,7 @@
           let angleDiff = targetAngle - fd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          angleDiffAbs = Math.abs(angleDiff);
           fd.heading += angleDiff * 0.1;
           fish.position.x += Math.sin(fd.heading) * fd.speed * 1.8;
           fish.position.z += Math.cos(fd.heading) * fd.speed * 1.8;
@@ -1539,28 +1601,55 @@
             fd.target = null;
           }
         } else {
-          // Orbital patrol — stay at radius ~11 around house
-          const orbitR = 11;
+          // Orbital patrol with per-fish orbit radius variation
+          const orbitR = 11 + (fd.orbitOffset || 0);
           const fx = fish.position.x, fz = fish.position.z;
           const currentR = Math.sqrt(fx*fx + fz*fz);
           const orbitAngle = Math.atan2(fx, fz);
           const tangent = orbitAngle + Math.PI * 0.5;
           const distError = currentR - orbitR;
-          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.8 + fishObjs.indexOf(fish) * 2) * 0.15;
+
+          // Schooling: gently converge heading toward average heading of nearby fish
+          let avgHeading = fd.heading, neighborCount = 0;
+          for (let fj = 0; fj < fishObjs.length; fj++) {
+            if (fj === fi) continue;
+            const other = fishObjs[fj];
+            if (fish.position.distanceTo(other.position) < 4) {
+              const oh = other.userData.heading || 0;
+              avgHeading += oh;
+              neighborCount++;
+            }
+          }
+          if (neighborCount > 0) avgHeading /= (neighborCount + 1);
+          const schoolInfluence = 0.02;
+
+          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.8 + fi * 2) * 0.15;
           let angleDiff = desiredAngle - fd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          fd.heading += angleDiff * 0.06;
+          angleDiffAbs = Math.abs(angleDiff);
+
+          // Blend schooling
+          let schoolDiff = avgHeading - fd.heading;
+          while (schoolDiff > Math.PI) schoolDiff -= Math.PI * 2;
+          while (schoolDiff < -Math.PI) schoolDiff += Math.PI * 2;
+
+          fd.heading += angleDiff * 0.06 + schoolDiff * schoolInfluence;
           fish.position.x += Math.sin(fd.heading) * fd.speed;
           fish.position.z += Math.cos(fd.heading) * fd.speed;
         }
+
         // Smooth lookAt
         const lookTarget = new THREE.Vector3(
           fish.position.x + Math.sin(fd.heading) * 2, fish.position.y,
           fish.position.z + Math.cos(fd.heading) * 2
         );
         fish.lookAt(lookTarget);
-        fish.position.y = 0.3 + Math.sin(t * 3 + fishObjs.indexOf(fish)) * 0.15;
+
+        // Fast tail wiggle (high frequency oscillation)
+        fish.rotation.y += Math.sin(t * 12 + fi * 3) * 0.06;
+
+        fish.position.y = 0.3 + Math.sin(t * 3 + fi) * 0.15;
       }
 
       if (fishWaveTimer > 540) {
@@ -1577,59 +1666,135 @@
     window.triggerSharkWave = function() {
       if (sharkWaveActive) return;
       sharkWaveActive = true; sharkWaveTimer = 0;
-      // Dark ocean water
+      // Dark ocean water with emissive glow for night visibility
       const wGeo = new THREE.CircleGeometry(25, 64);
       const wMat = new THREE.MeshStandardMaterial({
-        color: 0x0a2a4a, transparent: true, opacity: 0, roughness: 0.15, metalness: 0.4
+        color: 0x0a2a4a, transparent: true, opacity: 0, roughness: 0.15, metalness: 0.4,
+        emissive: 0x112244, emissiveIntensity: 0.15
       });
       sharkWaterPlane = new THREE.Mesh(wGeo, wMat);
       sharkWaterPlane.rotation.x = -Math.PI / 2;
       sharkWaterPlane.position.y = 0.06;
       scene.add(sharkWaterPlane);
 
-      // Spawn sharks
+      // Spawn detailed sharks
       sharkObjs.forEach(s => scene.remove(s));
       sharkObjs = [];
       for (let i = 0; i < 4; i++) {
         const sGroup = new THREE.Group();
-        const bodyGeo3 = new THREE.ConeGeometry(0.4, 2, 8);
-        bodyGeo3.rotateZ(-Math.PI / 2);
-        const sharkMat = new THREE.MeshStandardMaterial({ color: 0x4a5a6a, roughness: 0.5 });
-        const sharkBody = new THREE.Mesh(bodyGeo3, sharkMat);
+        const sharkMat = new THREE.MeshStandardMaterial({
+          color: 0x4a5a6a, roughness: 0.5,
+          emissive: 0x223344, emissiveIntensity: 0.3
+        });
+
+        // Torpedo-shaped body (elongated sphere)
+        const sharkBody = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 10), sharkMat);
+        sharkBody.scale.set(2.5, 0.7, 0.8);
         sGroup.add(sharkBody);
-        // Dorsal fin
-        const fin = new THREE.Mesh(
-          new THREE.ConeGeometry(0.15, 0.6, 4),
-          sharkMat
-        );
-        fin.position.set(0, 0.5, 0);
-        sGroup.add(fin);
-        // Tail
-        const tailFin = new THREE.Mesh(
-          new THREE.ConeGeometry(0.25, 0.5, 4),
-          sharkMat
-        );
-        tailFin.position.set(-1.2, 0.2, 0);
-        tailFin.rotation.z = 0.5;
-        sGroup.add(tailFin);
-        // White belly
-        const belly = new THREE.Mesh(
-          new THREE.SphereGeometry(0.35, 8, 6),
-          new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6 })
-        );
-        belly.scale.set(2, 0.6, 0.8);
-        belly.position.y = -0.1;
+
+        // White belly (half sphere on bottom)
+        const bellyMat = new THREE.MeshStandardMaterial({
+          color: 0xdddddd, roughness: 0.6,
+          emissive: 0x334455, emissiveIntensity: 0.15
+        });
+        const belly = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), bellyMat);
+        belly.scale.set(2.4, 0.5, 0.78);
+        belly.position.y = -0.05;
+        belly.rotation.x = Math.PI;
         sGroup.add(belly);
-        // Eyes
-        [-1,1].forEach(side => {
-          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({color:0x111111}));
-          eye.position.set(0.6, 0.1, side * 0.3);
+
+        // Tall dorsal fin (proper triangle using BufferGeometry)
+        const dorsalVerts = new Float32Array([
+          0.0, 0.28, 0,   -0.05, 0.75, 0,   -0.25, 0.28, 0
+        ]);
+        const dorsalGeo = new THREE.BufferGeometry();
+        dorsalGeo.setAttribute('position', new THREE.BufferAttribute(dorsalVerts, 3));
+        dorsalGeo.computeVertexNormals();
+        const dorsalFin = new THREE.Mesh(dorsalGeo, sharkMat);
+        sGroup.add(dorsalFin);
+        // Back side of dorsal fin
+        const dorsalBack = new THREE.Mesh(dorsalGeo, sharkMat);
+        dorsalBack.scale.z = -1;
+        sGroup.add(dorsalBack);
+
+        // Crescent tail fin (two angled planes)
+        const tailShape = new THREE.Shape();
+        tailShape.moveTo(0, 0);
+        tailShape.lineTo(-0.15, 0.45);
+        tailShape.lineTo(-0.3, 0.35);
+        tailShape.lineTo(-0.15, 0);
+        tailShape.closePath();
+        const tailGeo = new THREE.ShapeGeometry(tailShape);
+        const tailUpper = new THREE.Mesh(tailGeo, sharkMat);
+        tailUpper.position.set(-1.0, 0.05, 0);
+        tailUpper.rotation.y = 0.1;
+        sGroup.add(tailUpper);
+        const tailLower = new THREE.Mesh(tailGeo, sharkMat);
+        tailLower.position.set(-1.0, -0.05, 0);
+        tailLower.rotation.z = Math.PI;
+        tailLower.rotation.y = -0.1;
+        sGroup.add(tailLower);
+
+        // Pectoral fins (two small angled planes on sides)
+        [-1, 1].forEach(side => {
+          const pShape = new THREE.Shape();
+          pShape.moveTo(0, 0);
+          pShape.lineTo(0.15, -0.08 * side);
+          pShape.lineTo(-0.2, -0.15 * side);
+          pShape.closePath();
+          const pGeo = new THREE.ShapeGeometry(pShape);
+          const pFin = new THREE.Mesh(pGeo, sharkMat);
+          pFin.position.set(0.2, -0.15, side * 0.3);
+          pFin.rotation.x = side * 0.6;
+          sGroup.add(pFin);
+        });
+
+        // Gill slits (3 thin dark lines on each side)
+        const gillMat = new THREE.MeshBasicMaterial({ color: 0x222233 });
+        [-1, 1].forEach(side => {
+          for (let g = 0; g < 3; g++) {
+            const gill = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.1, 0.005), gillMat);
+            gill.position.set(0.4 - g * 0.1, 0.0, side * 0.3);
+            sGroup.add(gill);
+          }
+        });
+
+        // Menacing small black eyes
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        [-1, 1].forEach(side => {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), eyeMat);
+          eye.position.set(0.7, 0.08, side * 0.25);
           sGroup.add(eye);
         });
 
+        // Open mouth with teeth
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x1a0a0a });
+        const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mouthMat);
+        mouth.scale.set(1, 0.5, 1);
+        mouth.position.set(0.95, -0.05, 0);
+        sGroup.add(mouth);
+        // Teeth (small white cones inside mouth)
+        const toothMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        for (let ti = 0; ti < 6; ti++) {
+          const toothAngle = (ti / 6) * Math.PI * 2;
+          const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), toothMat);
+          tooth.position.set(
+            0.92,
+            -0.05 + Math.sin(toothAngle) * 0.07,
+            Math.cos(toothAngle) * 0.07
+          );
+          tooth.rotation.z = -Math.PI / 2;
+          sGroup.add(tooth);
+        }
+
+        // Self-illumination PointLight for night visibility
+        const sharkLight = new THREE.PointLight(0x4488bb, 0.5, 5);
+        sharkLight.position.set(0, 0.2, 0);
+        sGroup.add(sharkLight);
+
         const angle = Math.random() * Math.PI * 2;
         sGroup.position.set(Math.cos(angle) * 12, 0.3, Math.sin(angle) * 12);
-        sGroup.userData = { speed: 0.06 + Math.random() * 0.03, angle, target: null, biteTimer: 0 };
+        sGroup.userData = { speed: 0.06 + Math.random() * 0.03, angle, target: null, biteTimer: 0, idx: i };
         scene.add(sGroup);
         sharkObjs.push(sGroup);
       }
@@ -1646,14 +1811,15 @@
         if (sharkWaveTimer > 460) sharkWaterPlane.material.opacity = Math.max(0, sharkWaterPlane.material.opacity - 0.005);
       }
 
-      for (const shark of sharkObjs) {
+      for (let si = 0; si < sharkObjs.length; si++) {
+        const shark = sharkObjs[si];
         const sd = shark.userData;
         if (sd.biteTimer > 0) { sd.biteTimer--; continue; }
 
         // Initialize heading if needed
         if (sd.heading === undefined) sd.heading = sd.angle;
 
-        // Hunt monsters — smooth turn toward target
+        // Hunt monsters -- smooth turn toward target
         if (!sd.target || sd.target.userData?.state !== 'approaching') {
           sd.target = null;
           let closest = null, cDist = Infinity;
@@ -1665,14 +1831,16 @@
           sd.target = closest;
         }
 
+        let angleDiffAbs = 0;
         if (sd.target) {
-          // Smooth turn towards prey (like 2D version)
+          // Smooth turn towards prey
           const dx = sd.target.position.x - shark.position.x;
           const dz = sd.target.position.z - shark.position.z;
           const targetAngle = Math.atan2(dx, dz);
           let angleDiff = targetAngle - sd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          angleDiffAbs = Math.abs(angleDiff);
           const dist = Math.sqrt(dx*dx + dz*dz);
           const turnRate = dist < 4 ? 0.12 : 0.06;
           sd.heading += angleDiff * turnRate;
@@ -1686,30 +1854,32 @@
             sd.biteTimer = 40;
           }
         } else {
-          // Smooth orbital patrol — strong distance correction to stay in view
+          // Smooth orbital patrol
           const orbitR = 12;
           const sx = shark.position.x, sz = shark.position.z;
           const currentR = Math.sqrt(sx*sx + sz*sz);
           const orbitAngle = Math.atan2(sx, sz);
           const tangent = orbitAngle + Math.PI * 0.5;
           const distError = currentR - orbitR;
-          // Strong correction: 0.03 per unit of error (was 0.008)
-          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.5 + sharkObjs.indexOf(shark) * 2) * 0.1;
+          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.5 + si * 2) * 0.1;
           let angleDiff = desiredAngle - sd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          angleDiffAbs = Math.abs(angleDiff);
           sd.heading += angleDiff * 0.06;
           // Hard clamp: if too far out, force back toward orbit
           if (currentR > orbitR + 5) {
             const inward = Math.atan2(-sx, -sz);
-            sd.heading = inward + Math.PI * 0.3; // angle back inward
+            sd.heading = inward + Math.PI * 0.3;
           }
-          const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + sharkObjs.indexOf(shark)) * 0.15);
+          const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + si) * 0.15);
           shark.position.x += Math.sin(sd.heading) * swimSpeed;
           shark.position.z += Math.cos(sd.heading) * swimSpeed;
         }
 
-        shark.position.y = 0.3 + Math.sin(t * 1.8 + sharkObjs.indexOf(shark) * 1.5) * 0.2;
+        // Slower, smoother undulating vertical movement
+        shark.position.y = 0.3 + Math.sin(t * 1.0 + si * 1.5) * 0.15;
+
         // Smooth lookAt using heading
         const lookTarget = new THREE.Vector3(
           shark.position.x + Math.sin(sd.heading) * 2,
@@ -1717,6 +1887,12 @@
           shark.position.z + Math.cos(sd.heading) * 2
         );
         shark.lookAt(lookTarget);
+
+        // Tail oscillation: slight yaw to simulate tail-driven swimming
+        shark.rotation.y += Math.sin(t * 6 + si * 2) * 0.05;
+
+        // Subtle roll when turning sharply
+        shark.rotation.z = angleDiffAbs * 0.3 * (Math.sin(t * 2 + si) > 0 ? 1 : -1);
       }
 
       if (sharkWaveTimer > 600) {
