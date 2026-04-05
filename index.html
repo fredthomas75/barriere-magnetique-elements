@@ -981,42 +981,13 @@
         ctx.stroke();
       });
 
-      // Front door
+      // Door position (drawn after ground)
       const doorW = hw * 0.14;
       const doorH = hh * 0.28;
       const doorX = hx - doorW / 2;
       const doorY = hy + hh * 0.7 - doorH;
-      const doorGrad = ctx.createLinearGradient(doorX, doorY, doorX + doorW, doorY + doorH);
-      doorGrad.addColorStop(0, '#cc2222');
-      doorGrad.addColorStop(1, '#881111');
-      ctx.fillStyle = doorGrad;
-      ctx.beginPath();
-      ctx.moveTo(doorX, doorY + doorH);
-      ctx.lineTo(doorX, doorY + doorW * 0.3);
-      ctx.arcTo(doorX, doorY, doorX + doorW / 2, doorY, doorW * 0.5);
-      ctx.arcTo(doorX + doorW, doorY, doorX + doorW, doorY + doorW * 0.3, doorW * 0.5);
-      ctx.lineTo(doorX + doorW, doorY + doorH);
-      ctx.closePath();
-      ctx.fill();
 
-      // Door handle
-      ctx.beginPath();
-      ctx.arc(doorX + doorW * 0.75, doorY + doorH * 0.55, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#c4a53a';
-      ctx.fill();
-
-      // Door light
-      if (barrierActive) {
-        ctx.shadowColor = 'rgba(255, 200, 80, 0.6)';
-        ctx.shadowBlur = 30;
-        ctx.beginPath();
-        ctx.arc(hx, doorY + doorH * 0.15 - 15, 5, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 220, 140, 0.9)';
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-
-      // Ground / lawn — brighter during day
+      // Ground / lawn — brighter during day (must be drawn before door)
       const groundGrad = ctx.createLinearGradient(0, hy + hh * 0.37, 0, H);
       const gc1 = lerpColor([26, 40, 16], [60, 100, 35], hd);
       const gc2 = lerpColor([15, 26, 8], [40, 70, 22], hd);
@@ -1037,6 +1008,41 @@
       ctx.lineTo(doorX + doorW + 5, doorY + doorH);
       ctx.closePath();
       ctx.fill();
+
+      // Front door (drawn after ground so it's visible)
+      const doorGrad = ctx.createLinearGradient(doorX, doorY, doorX + doorW, doorY + doorH);
+      doorGrad.addColorStop(0, '#cc2222');
+      doorGrad.addColorStop(1, '#881111');
+      ctx.fillStyle = doorGrad;
+      ctx.beginPath();
+      ctx.moveTo(doorX, doorY + doorH);
+      ctx.lineTo(doorX, doorY + doorW * 0.3);
+      ctx.arcTo(doorX, doorY, doorX + doorW / 2, doorY, doorW * 0.5);
+      ctx.arcTo(doorX + doorW, doorY, doorX + doorW, doorY + doorW * 0.3, doorW * 0.5);
+      ctx.lineTo(doorX + doorW, doorY + doorH);
+      ctx.closePath();
+      ctx.fill();
+      // Door frame
+      ctx.strokeStyle = '#661010';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Door handle
+      ctx.beginPath();
+      ctx.arc(doorX + doorW * 0.75, doorY + doorH * 0.55, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#c4a53a';
+      ctx.fill();
+
+      // Door light
+      if (barrierActive) {
+        ctx.shadowColor = 'rgba(255, 200, 80, 0.6)';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.arc(hx, doorY + doorH * 0.15 - 15, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 220, 140, 0.9)';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
 
       // Bushes
       [[-0.38, 0.34], [0.38, 0.34], [-0.2, 0.36], [0.2, 0.36]].forEach(([ox, oy]) => {
@@ -5413,8 +5419,8 @@
       } else if (tornadoTimer < 360) {
         // Circle around the barrier, catching monsters
         const orbitT = (tornadoTimer - 60) * 0.012;
-        tornadoX = centerX + Math.cos(orbitT) * (barrierRadius + 70);
-        tornadoY = (centerY + 20) + Math.sin(orbitT) * (barrierRadius + 70) * 0.55;
+        tornadoX = centerX + Math.cos(orbitT) * (barrierRadius + 120);
+        tornadoY = (centerY + 20) + Math.sin(orbitT) * (barrierRadius + 120) * 0.55;
 
         // Catch approaching monsters
         for (const m of monsters) {
@@ -5423,7 +5429,7 @@
           const dx = m.x - tornadoX;
           const dy = m.y - tornadoY;
           const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 80) {
+          if (d < 150) {
             m.state = 'caught';
             tornadoCaughtMonsters.push({
               monster: m,
