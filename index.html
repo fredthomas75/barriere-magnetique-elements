@@ -215,10 +215,17 @@
     moonLight.position.set(-8, 15, -5);
     scene.add(moonLight);
 
+    // Hemisphere light for natural ambient
+    const hemiLight = new THREE.HemisphereLight(0x8899cc, 0x445522, 0.3);
+    scene.add(hemiLight);
+
     // Barrier glow light
     const barrierLight = new THREE.PointLight(0x00ff88, 0, 20);
     barrierLight.position.set(0, 4, 0);
     scene.add(barrierLight);
+
+    // Death lights array (colored point lights at monster death positions)
+    const deathLights = [];
 
     // ===== SKY =====
     function updateSky() {
@@ -240,6 +247,8 @@
       ambientLight.color.setHSL(0.6, 0.3, 0.3 + d * 0.4);
 
       renderer.toneMappingExposure = 0.5 + d * 0.8;
+      // Update hemisphere light
+      hemiLight.intensity = 0.15 + d * 0.3;
     }
 
     // ===== GROUND =====
@@ -495,6 +504,25 @@
     barrier.scale.set(1, 0.7, 1);
     scene.add(barrier);
 
+    // Inner energy rings (3 TorusGeometry with different rotation speeds)
+    const energyRings = [];
+    const ringColors = [0x00ff88, 0x00ccff, 0xaa44ff];
+    for (let ri = 0; ri < 3; ri++) {
+      const ringGeo = new THREE.TorusGeometry(7 + ri * 0.8, 0.04, 8, 64);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: ringColors[ri], transparent: true, opacity: 0
+      });
+      const ering = new THREE.Mesh(ringGeo, ringMat);
+      ering.position.set(0, 2 + ri * 1.5, 0);
+      ering.userData.rotSpeedX = 0.3 + ri * 0.2;
+      ering.userData.rotSpeedY = 0.5 + ri * 0.15;
+      scene.add(ering);
+      energyRings.push(ering);
+    }
+
+    // Barrier hit pulse state
+    let barrierHitPulse = 0; // 0 = no pulse, >0 = pulsing
+
     // Barrier particle ring
     const particleCount = 500;
     const particlesGeo = new THREE.BufferGeometry();
@@ -532,46 +560,98 @@
       const size = 0.6 + Math.random() * 0.5;
       const hue = Math.random();
 
-      // Body
-      const bodyGeo2 = new THREE.SphereGeometry(size, 10, 8);
+      // Deformed body using IcosahedronGeometry with vertex displacement
+      const bodyGeo2 = new THREE.IcosahedronGeometry(size, 2);
+      const posAttr = bodyGeo2.attributes.position;
+      for (let v = 0; v < posAttr.count; v++) {
+        const x = posAttr.getX(v), y = posAttr.getY(v), z = posAttr.getZ(v);
+        const len = Math.sqrt(x*x + y*y + z*z);
+        const noise = 1.0 + (Math.random() - 0.5) * 0.4;
+        posAttr.setXYZ(v, x/len * size * noise, y/len * size * noise, z/len * size * noise);
+      }
+      bodyGeo2.computeVertexNormals();
+
+      // Dark body with glowing veins/cracks (emissive material)
       const bodyMat2 = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(hue, 0.7, 0.35),
-        roughness: 0.6, metalness: 0.2
+        color: new THREE.Color().setHSL(hue, 0.6, 0.12),
+        emissive: new THREE.Color().setHSL(hue, 1.0, 0.3),
+        emissiveIntensity: 0.4,
+        roughness: 0.7, metalness: 0.3
       });
       const monsterBody = new THREE.Mesh(bodyGeo2, bodyMat2);
       monsterBody.castShadow = true;
       group.add(monsterBody);
 
-      // Eyes
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      [-0.25, 0.25].forEach(ox => {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(size*0.15, 6, 6), eyeMat);
-        eye.position.set(ox * size, size * 0.2, size * 0.8);
+      // Multiple glowing eyes (3-5 randomly placed)
+      const eyeCount = 3 + Math.floor(Math.random() * 3);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+      const eyeGlowMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+      for (let e = 0; e < eyeCount; e++) {
+        const theta = (Math.random() - 0.3) * Math.PI * 0.6;
+        const phi = (Math.random() - 0.5) * Math.PI * 0.8;
+        const ex = Math.sin(phi) * Math.cos(theta) * size * 0.9;
+        const ey = Math.sin(theta) * size * 0.5 + size * 0.15;
+        const ez = Math.cos(phi) * Math.cos(theta) * size * 0.9;
+        const eyeSize = size * (0.06 + Math.random() * 0.08);
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSize, 6, 6), eyeMat);
+        eye.position.set(ex, ey, ez);
         group.add(eye);
-        // Pupil
-        const pupil = new THREE.Mesh(new THREE.SphereGeometry(size*0.08, 6, 6), new THREE.MeshBasicMaterial({color:0x000000}));
-        pupil.position.set(ox * size, size * 0.2, size * 0.9);
-        group.add(pupil);
-      });
-
-      // Horns/spikes
-      const hornMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7 });
-      const hornCount = 2 + Math.floor(Math.random()*3);
-      for (let h = 0; h < hornCount; h++) {
-        const horn = new THREE.Mesh(new THREE.ConeGeometry(size*0.12, size*0.5, 5), hornMat);
-        const a = (h / hornCount) * Math.PI - Math.PI*0.2;
-        horn.position.set(Math.sin(a)*size*0.6, size*0.8, -Math.cos(a)*size*0.3);
-        horn.rotation.z = Math.sin(a) * 0.3;
-        group.add(horn);
+        // Glow ring around eye
+        const ring = new THREE.Mesh(new THREE.RingGeometry(eyeSize * 0.8, eyeSize * 1.4, 8), eyeGlowMat);
+        ring.position.copy(eye.position);
+        ring.lookAt(eye.position.clone().multiplyScalar(2));
+        group.add(ring);
       }
 
-      // Mouth
-      const mouth = new THREE.Mesh(
-        new THREE.PlaneGeometry(size*0.5, size*0.15),
-        new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide })
+      // Jagged teeth/mouth opening
+      const mouthGroup = new THREE.Group();
+      const jawRadius = size * 0.35;
+      const teethCount = 7 + Math.floor(Math.random() * 4);
+      // Upper jaw arc (dark interior)
+      const mouthInner = new THREE.Mesh(
+        new THREE.CircleGeometry(jawRadius, 12, 0, Math.PI),
+        new THREE.MeshBasicMaterial({ color: 0x220000, side: THREE.DoubleSide })
       );
-      mouth.position.set(0, -size*0.2, size*0.85);
-      group.add(mouth);
+      mouthGroup.add(mouthInner);
+      // Jagged teeth
+      const toothMat = new THREE.MeshStandardMaterial({ color: 0xddcc99, roughness: 0.5 });
+      for (let ti = 0; ti < teethCount; ti++) {
+        const angle = (ti / teethCount) * Math.PI;
+        const tx = Math.cos(angle) * jawRadius;
+        const ty = Math.sin(angle) * jawRadius;
+        const toothH = size * (0.08 + Math.random() * 0.12);
+        const tooth = new THREE.Mesh(new THREE.ConeGeometry(size * 0.03, toothH, 3), toothMat);
+        tooth.position.set(tx, ty, 0);
+        tooth.lookAt(0, 0, 0);
+        mouthGroup.add(tooth);
+      }
+      mouthGroup.position.set(0, -size * 0.25, size * 0.8);
+      mouthGroup.lookAt(0, -size * 0.25, size * 2);
+      group.add(mouthGroup);
+
+      // Tentacles / spikes protruding (ConeGeometry)
+      const spikeMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(hue, 0.8, 0.15),
+        emissive: new THREE.Color().setHSL(hue, 1.0, 0.2),
+        emissiveIntensity: 0.3, roughness: 0.6
+      });
+      const spikeCount = 5 + Math.floor(Math.random() * 5);
+      const spikes = [];
+      for (let s = 0; s < spikeCount; s++) {
+        const sTheta = Math.random() * Math.PI * 2;
+        const sPhi = (Math.random() - 0.5) * Math.PI;
+        const sLen = size * (0.4 + Math.random() * 0.5);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(size * 0.06, sLen, 4), spikeMat);
+        spike.position.set(
+          Math.cos(sTheta) * Math.cos(sPhi) * size * 0.8,
+          Math.sin(sPhi) * size * 0.8,
+          Math.sin(sTheta) * Math.cos(sPhi) * size * 0.8
+        );
+        spike.lookAt(spike.position.clone().multiplyScalar(2));
+        spike.castShadow = true;
+        group.add(spike);
+        spikes.push(spike);
+      }
 
       // Spawn position (random point far away)
       const spawnAngle = Math.random() * Math.PI * 2;
@@ -588,7 +668,12 @@
         size,
         wobblePhase: Math.random() * Math.PI * 2,
         flyVel: new THREE.Vector3(),
-        hitTime: 0
+        hitTime: 0,
+        currentDir: new THREE.Vector3(), // for lerped direction
+        breathPhase: Math.random() * Math.PI * 2,
+        bodyMesh: monsterBody,
+        spikes,
+        baseEmissive: 0.4
       };
 
       scene.add(group);
@@ -597,6 +682,9 @@
 
     // ===== PROJECTILES =====
     const projectiles = [];
+
+    // Trail particles pool
+    const trailParticles = [];
 
     function fireProjectile() {
       if (!barrierActive) return;
@@ -618,7 +706,25 @@
       const startPos = dir.clone().multiplyScalar(9.2);
       startPos.y = 3 + (Math.random()-0.5)*3;
 
-      const geo = new THREE.SphereGeometry(0.15, 6, 6);
+      // Element-specific shapes
+      let geo;
+      if (el === 'fire') {
+        // Spiky shape for fire
+        geo = new THREE.IcosahedronGeometry(0.15, 0);
+        const fpos = geo.attributes.position;
+        for (let fv = 0; fv < fpos.count; fv++) {
+          const fx = fpos.getX(fv), fy = fpos.getY(fv), fz = fpos.getZ(fv);
+          const flen = Math.sqrt(fx*fx+fy*fy+fz*fz);
+          const spike = 1 + Math.random() * 0.6;
+          fpos.setXYZ(fv, fx/flen*0.15*spike, fy/flen*0.15*spike, fz/flen*0.15*spike);
+        }
+        geo.computeVertexNormals();
+      } else if (el === 'ice') {
+        // Crystal octahedron for ice
+        geo = new THREE.OctahedronGeometry(0.15, 0);
+      } else {
+        geo = new THREE.SphereGeometry(0.15, 6, 6);
+      }
       const mat = new THREE.MeshBasicMaterial({ color: colors[el] });
       const proj = new THREE.Mesh(geo, mat);
       proj.position.copy(startPos);
@@ -636,7 +742,9 @@
       proj.userData = {
         vel: dir.clone().multiplyScalar(0.4),
         life: 120,
-        element: el
+        element: el,
+        trailTimer: 0,
+        baseDir: dir.clone() // for electric zigzag
       };
 
       scene.add(proj);
@@ -671,6 +779,9 @@
       [cobraSegments, lightningBolts, fishObjs, sharkObjs, pokemonObjs, tornadoObj, dragonSegments].forEach(arr => {
         if (arr) { if (Array.isArray(arr)) arr.forEach(o => { if(o?.parent) scene.remove(o); }); }
       });
+      // Clean up trail particles and death lights
+      trailParticles.forEach(tp => scene.remove(tp)); trailParticles.length = 0;
+      deathLights.forEach(dl => scene.remove(dl)); deathLights.length = 0;
     };
 
     window.triggerSuperBoost = function() {
@@ -688,6 +799,12 @@
       m.userData.flyVel.y = 0.2 + Math.random() * 0.15;
       monstersDefeated++;
       document.getElementById('monsterCount').textContent = monstersDefeated;
+      // Spawn colored death light at kill position
+      const dl = new THREE.PointLight(new THREE.Color().setHSL(Math.random(), 1, 0.5), 3, 8);
+      dl.position.copy(m.position);
+      dl.userData = { life: 1.0 };
+      scene.add(dl);
+      deathLights.push(dl);
     }
 
     // ===== COBRA VENIMEUX =====
@@ -1046,22 +1163,72 @@
     window.triggerTornado = function() {
       if (tornadoActive) return;
       tornadoActive = true; tornadoTimer = 0; tornadoCaught = [];
-      // Build tornado from stacked rings
+      // Build particle-based tornado funnel
       tornadoObj = new THREE.Group();
-      for (let i = 0; i < 15; i++) {
-        const p = i / 15;
-        const r = 2 * (1 - p) + 0.3;
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(r, 0.15, 6, 16),
-          new THREE.MeshStandardMaterial({
-            color: new THREE.Color().setHSL(0, 0, 0.4 + p * 0.3),
-            transparent: true, opacity: 0.5, roughness: 0.8
-          })
-        );
-        ring.position.y = i * 1.0;
-        ring.rotation.x = Math.PI / 2;
-        tornadoObj.add(ring);
+
+      // Main spiral particles (250 particles spiraling upward)
+      const tPartCount = 250;
+      const tPartGeo = new THREE.BufferGeometry();
+      const tPartPos = new Float32Array(tPartCount * 3);
+      const tPartCol = new Float32Array(tPartCount * 3);
+      const tPartData = []; // store angle and height for animation
+      for (let i = 0; i < tPartCount; i++) {
+        const h = Math.random() * 15;
+        const p = h / 15; // 0=bottom, 1=top
+        const radius = 2.5 * (1 - p * 0.8) + 0.2; // wide at bottom, narrow at top
+        const angle = Math.random() * Math.PI * 2;
+        tPartPos[i*3] = Math.cos(angle) * radius;
+        tPartPos[i*3+1] = h;
+        tPartPos[i*3+2] = Math.sin(angle) * radius;
+        const gray = 0.35 + p * 0.35 + Math.random() * 0.1;
+        tPartCol[i*3] = gray; tPartCol[i*3+1] = gray * 0.95; tPartCol[i*3+2] = gray * 0.9;
+        tPartData.push({ angle, height: h, speed: 1.5 + Math.random() * 2 });
       }
+      tPartGeo.setAttribute('position', new THREE.BufferAttribute(tPartPos, 3));
+      tPartGeo.setAttribute('color', new THREE.BufferAttribute(tPartCol, 3));
+      const tPartMat = new THREE.PointsMaterial({
+        size: 0.25, vertexColors: true, transparent: true, opacity: 0.7,
+        blending: THREE.NormalBlending, depthWrite: false
+      });
+      const tParticles = new THREE.Points(tPartGeo, tPartMat);
+      tornadoObj.add(tParticles);
+      tornadoObj.userData.tPartData = tPartData;
+      tornadoObj.userData.tPartGeo = tPartGeo;
+
+      // Debris particles (small boxes/spheres spinning around)
+      const debrisCount = 30;
+      const debrisMeshes = [];
+      for (let d = 0; d < debrisCount; d++) {
+        const isBox = Math.random() > 0.5;
+        const debrisGeo = isBox
+          ? new THREE.BoxGeometry(0.15, 0.15, 0.15)
+          : new THREE.SphereGeometry(0.1, 4, 4);
+        const debrisMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color().setHSL(0.08 + Math.random() * 0.05, 0.3, 0.25 + Math.random() * 0.2),
+          roughness: 0.9
+        });
+        const debris = new THREE.Mesh(debrisGeo, debrisMat);
+        debris.userData.dAngle = Math.random() * Math.PI * 2;
+        debris.userData.dHeight = Math.random() * 12;
+        debris.userData.dSpeed = 1.5 + Math.random() * 2.5;
+        debris.userData.dRadOff = Math.random() * 0.5;
+        debris.castShadow = true;
+        tornadoObj.add(debris);
+        debrisMeshes.push(debris);
+      }
+      tornadoObj.userData.debrisMeshes = debrisMeshes;
+
+      // Dust cloud at the base (semi-transparent disc)
+      const dustGeo = new THREE.CircleGeometry(3.5, 24);
+      const dustMat = new THREE.MeshBasicMaterial({
+        color: 0x8a7a6a, transparent: true, opacity: 0.3, side: THREE.DoubleSide
+      });
+      const dustCloud = new THREE.Mesh(dustGeo, dustMat);
+      dustCloud.rotation.x = -Math.PI / 2;
+      dustCloud.position.y = 0.1;
+      tornadoObj.add(dustCloud);
+      tornadoObj.userData.dustCloud = dustCloud;
+
       tornadoObj.position.set(20, 0, 0);
       scene.add(tornadoObj);
     };
@@ -1080,10 +1247,42 @@
         tornadoObj.position.y += 0.15;
       }
 
-      // Spin rings
-      tornadoObj.children.forEach((ring, i) => {
-        ring.rotation.z = t * (2 + i * 0.3);
-      });
+      // Animate tornado particles spiraling upward
+      const tpd = tornadoObj.userData.tPartData;
+      const tpg = tornadoObj.userData.tPartGeo;
+      if (tpd && tpg) {
+        const tpos = tpg.attributes.position.array;
+        for (let i = 0; i < tpd.length; i++) {
+          tpd[i].angle += tpd[i].speed * 0.02;
+          tpd[i].height += 0.04 + Math.random() * 0.02;
+          if (tpd[i].height > 15) tpd[i].height = 0;
+          const p = tpd[i].height / 15;
+          const radius = 2.5 * (1 - p * 0.8) + 0.2 + Math.sin(t * 2 + i) * 0.2;
+          tpos[i*3] = Math.cos(tpd[i].angle) * radius;
+          tpos[i*3+1] = tpd[i].height;
+          tpos[i*3+2] = Math.sin(tpd[i].angle) * radius;
+        }
+        tpg.attributes.position.needsUpdate = true;
+      }
+      // Animate debris spinning
+      const debrisMeshes = tornadoObj.userData.debrisMeshes;
+      if (debrisMeshes) {
+        for (const d of debrisMeshes) {
+          d.userData.dAngle += d.userData.dSpeed * 0.02;
+          d.userData.dHeight += 0.03;
+          if (d.userData.dHeight > 12) d.userData.dHeight = 0;
+          const dp = d.userData.dHeight / 12;
+          const dr = 2.2 * (1 - dp * 0.7) + d.userData.dRadOff;
+          d.position.set(Math.cos(d.userData.dAngle) * dr, d.userData.dHeight, Math.sin(d.userData.dAngle) * dr);
+          d.rotation.x = t * 3; d.rotation.z = t * 2;
+        }
+      }
+      // Rotate dust cloud
+      const dustCloud = tornadoObj.userData.dustCloud;
+      if (dustCloud) {
+        dustCloud.rotation.z = t * 0.5;
+        dustCloud.material.opacity = 0.2 + Math.sin(t * 2) * 0.08;
+      }
 
       // Catch monsters
       if (tornadoTimer >= 60 && tornadoTimer < 360) {
@@ -1405,6 +1604,34 @@
       barrierMat.uniforms.uCamPos.value.copy(camera.position);
       barrierLight.intensity = barrierProgress * 2;
 
+      // Barrier hit pulse (scale to 1.05 then back)
+      if (barrierHitPulse > 0) {
+        barrierHitPulse -= 0.04;
+        if (barrierHitPulse < 0) barrierHitPulse = 0;
+        const pulseScale = 1.0 + barrierHitPulse * 0.05;
+        barrier.scale.set(pulseScale, 0.7 * pulseScale, pulseScale);
+      } else {
+        barrier.scale.set(1, 0.7, 1);
+      }
+
+      // Animate inner energy rings
+      for (const ering of energyRings) {
+        ering.rotation.x += ering.userData.rotSpeedX * 0.01;
+        ering.rotation.y += ering.userData.rotSpeedY * 0.01;
+        ering.material.opacity = barrierProgress * (0.3 + Math.sin(t * 2) * 0.1);
+      }
+
+      // Update death lights (fade out)
+      for (let di = deathLights.length - 1; di >= 0; di--) {
+        const dl = deathLights[di];
+        dl.userData.life -= 0.02;
+        dl.intensity = dl.userData.life * 3;
+        if (dl.userData.life <= 0) {
+          scene.remove(dl);
+          deathLights.splice(di, 1);
+        }
+      }
+
       // Barrier particles
       particlesMat.opacity = barrierProgress * 0.7;
       const posArr = particlesGeo.attributes.position.array;
@@ -1441,11 +1668,28 @@
         ud.wobblePhase += 0.03;
 
         if (ud.state === 'approaching') {
-          // Move toward house (keep above ground)
-          const dir = new THREE.Vector3(-m.position.x, 0, -m.position.z).normalize();
-          m.position.add(dir.clone().multiplyScalar(ud.speed * (superBoostActive ? 0.5 : 1)));
+          // Smooth lerped direction instead of instant direction change
+          const targetDir = new THREE.Vector3(-m.position.x, 0, -m.position.z).normalize();
+          if (ud.currentDir.lengthSq() < 0.01) ud.currentDir.copy(targetDir);
+          ud.currentDir.lerp(targetDir, 0.05);
+          ud.currentDir.normalize();
+          m.position.add(ud.currentDir.clone().multiplyScalar(ud.speed * (superBoostActive ? 0.5 : 1)));
           m.position.y = Math.max(ud.size + 0.2, 1.5 + Math.sin(ud.wobblePhase) * 0.5);
           m.rotation.y = Math.atan2(-m.position.x, -m.position.z);
+
+          // Pulsing/breathing animation
+          if (ud.bodyMesh) {
+            ud.breathPhase += 0.04;
+            const breathScale = 1 + Math.sin(ud.breathPhase) * 0.06;
+            ud.bodyMesh.scale.setScalar(breathScale);
+            ud.bodyMesh.material.emissiveIntensity = ud.baseEmissive + Math.sin(ud.breathPhase * 1.5) * 0.2;
+          }
+          // Animate spikes slightly
+          if (ud.spikes) {
+            ud.spikes.forEach((sp, si) => {
+              sp.scale.y = 1 + Math.sin(ud.wobblePhase * 2 + si) * 0.15;
+            });
+          }
 
           // Check barrier collision (horizontal distance)
           const dist = Math.sqrt(m.position.x**2 + m.position.z**2);
@@ -1457,11 +1701,18 @@
             ud.flyVel.y = 0.2 + Math.random() * 0.15;
             monstersDefeated++;
             document.getElementById('monsterCount').textContent = monstersDefeated;
+            barrierHitPulse = 1.0; // trigger barrier pulse
+            // Spawn death light at hit position
+            const dl = new THREE.PointLight(new THREE.Color().setHSL(Math.random(), 1, 0.5), 3, 8);
+            dl.position.copy(m.position);
+            dl.userData = { life: 1.0 };
+            scene.add(dl);
+            deathLights.push(dl);
           }
           // Stop at barrier if inactive
           if (dist < 9.5 && !barrierActive) {
-            const pushDir = m.position.clone().normalize();
-            m.position.copy(pushDir.multiplyScalar(9.6));
+            const pushDir2 = m.position.clone().normalize();
+            m.position.copy(pushDir2.multiplyScalar(9.6));
           }
         }
 
@@ -1490,8 +1741,30 @@
       // Update projectiles
       for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
+        // Electric zigzag path
+        if (p.userData.element === 'electric') {
+          p.userData.trailTimer++;
+          if (p.userData.trailTimer % 4 === 0) {
+            const perp = new THREE.Vector3(-p.userData.vel.z, 0, p.userData.vel.x).normalize();
+            p.position.add(perp.multiplyScalar((Math.random() - 0.5) * 0.6));
+          }
+        }
         p.position.add(p.userData.vel);
         p.userData.life--;
+
+        // Spawn trail particles behind each projectile
+        p.userData.trailTimer = (p.userData.trailTimer || 0) + 1;
+        if (p.userData.trailTimer % 3 === 0) {
+          const trailGeo = new THREE.SphereGeometry(0.06, 4, 4);
+          const trailMat = new THREE.MeshBasicMaterial({
+            color: p.material.color.clone(), transparent: true, opacity: 0.6
+          });
+          const trail = new THREE.Mesh(trailGeo, trailMat);
+          trail.position.copy(p.position);
+          trail.userData = { life: 20 };
+          scene.add(trail);
+          trailParticles.push(trail);
+        }
 
         // Check collision with monsters
         for (let j = monsters.length - 1; j >= 0; j--) {
@@ -1505,6 +1778,12 @@
             m.userData.flyVel.y = 0.15 + Math.random() * 0.1;
             monstersDefeated++;
             document.getElementById('monsterCount').textContent = monstersDefeated;
+            // Death light at projectile kill
+            const dl2 = new THREE.PointLight(p.material.color.clone(), 3, 6);
+            dl2.position.copy(m.position);
+            dl2.userData = { life: 0.8 };
+            scene.add(dl2);
+            deathLights.push(dl2);
             p.userData.life = 0;
             break;
           }
@@ -1513,6 +1792,18 @@
         if (p.userData.life <= 0 || p.position.length() > 35) {
           scene.remove(p);
           projectiles.splice(i, 1);
+        }
+      }
+
+      // Update trail particles (fade and remove)
+      for (let ti = trailParticles.length - 1; ti >= 0; ti--) {
+        const tp = trailParticles[ti];
+        tp.userData.life--;
+        tp.material.opacity = tp.userData.life / 20;
+        tp.scale.multiplyScalar(0.93);
+        if (tp.userData.life <= 0) {
+          scene.remove(tp);
+          trailParticles.splice(ti, 1);
         }
       }
 
@@ -1525,9 +1816,10 @@
       updatePokemon(t);
       updateMetalWave(t);
 
-      // Gentle camera sway
-      camera.position.x = Math.sin(t * 0.1) * 0.5;
-      camera.position.y = 8 + Math.sin(t * 0.15) * 0.3;
+      // More cinematic camera sway (increased amplitude)
+      camera.position.x = Math.sin(t * 0.1) * 1.2 + Math.cos(t * 0.07) * 0.4;
+      camera.position.y = 8 + Math.sin(t * 0.15) * 0.6;
+      camera.position.z = 22 + Math.sin(t * 0.08) * 0.5;
       camera.lookAt(0, 2.5, 0);
 
       renderer.render(scene, camera);
