@@ -175,7 +175,7 @@
             osc.frequency.value = freq;
             osc.frequency.linearRampToValueAtTime(freq * 1.5, now + 0.4);
             const g = audioCtx.createGain();
-            g.gain.value = 0.1;
+            g.gain.value = 0.25;
             g.gain.linearRampToValueAtTime(0, now + 0.5);
             osc.connect(g); g.connect(audioCtx.destination);
             osc.start(now + i * 0.08); osc.stop(now + 0.5);
@@ -186,7 +186,7 @@
           osc.frequency.value = 150;
           osc.frequency.linearRampToValueAtTime(50, now + 0.2);
           const g = audioCtx.createGain();
-          g.gain.value = 0.12;
+          g.gain.value = 0.3;
           g.gain.linearRampToValueAtTime(0, now + 0.25);
           osc.connect(g); g.connect(audioCtx.destination);
           osc.start(); osc.stop(now + 0.25);
@@ -196,7 +196,7 @@
           osc.frequency.value = 800;
           osc.frequency.linearRampToValueAtTime(400, now + 0.1);
           const g = audioCtx.createGain();
-          g.gain.value = 0.04;
+          g.gain.value = 0.1;
           g.gain.linearRampToValueAtTime(0, now + 0.12);
           osc.connect(g); g.connect(audioCtx.destination);
           osc.start(); osc.stop(now + 0.12);
@@ -234,65 +234,83 @@
           const d = buf.getChannelData(0);
           for (let i = 0; i < bufSize; i++) {
             const t2 = i / audioCtx.sampleRate;
-            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2 * 2) * Math.exp(-t2 * 0.5) * 0.1;
+            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2 * 2) * Math.exp(-t2 * 0.5) * 0.25;
+            d[i] += Math.sin(t2 * 30 + Math.sin(t2 * 5) * 4) * Math.exp(-t2 * 0.6) * 0.1;
           }
           const src = audioCtx.createBufferSource();
           src.buffer = buf;
           const lp = audioCtx.createBiquadFilter();
-          lp.type = 'lowpass'; lp.frequency.value = 400;
-          const g2 = audioCtx.createGain(); g2.gain.value = 0.2;
+          lp.type = 'lowpass'; lp.frequency.value = 500;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.4;
           src.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
           src.start();
         } else if (type === 'tornado') {
-          const bufSize = audioCtx.sampleRate * 3;
+          const bufSize = audioCtx.sampleRate * 4;
           const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
           const d = buf.getChannelData(0);
           for (let i = 0; i < bufSize; i++) {
             const t2 = i / audioCtx.sampleRate;
-            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2) * Math.exp(-t2 * 0.3) * 0.1;
-            d[i] += Math.sin(t2 * 60 + Math.sin(t2 * 8) * 10) * Math.exp(-t2 * 0.4) * 0.05;
+            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2 * 0.8) * Math.exp(-t2 * 0.25) * 0.2;
+            d[i] += Math.sin(t2 * 60 + Math.sin(t2 * 8) * 10) * Math.exp(-t2 * 0.3) * 0.1;
+            d[i] += Math.sin(t2 * 120 + Math.sin(t2 * 3) * 20) * Math.exp(-t2 * 0.35) * 0.06;
           }
           const src = audioCtx.createBufferSource();
           src.buffer = buf;
           const bp = audioCtx.createBiquadFilter();
           bp.type = 'bandpass'; bp.frequency.value = 250; bp.Q.value = 2;
-          const g2 = audioCtx.createGain(); g2.gain.value = 0.3;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.5;
           src.connect(bp); bp.connect(g2); g2.connect(audioCtx.destination);
           src.start();
         } else if (type === 'cobra') {
-          const bufSize = audioCtx.sampleRate * 0.5;
+          // Hissing sound
+          const bufSize = audioCtx.sampleRate * 0.8;
           const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
           const d = buf.getChannelData(0);
-          for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 3) * 0.15;
+          for (let i = 0; i < bufSize; i++) {
+            const t2 = i / audioCtx.sampleRate;
+            d[i] = (Math.random() * 2 - 1) * Math.exp(-t2 * 2) * 0.3;
+          }
           const src = audioCtx.createBufferSource();
           src.buffer = buf;
           const hp = audioCtx.createBiquadFilter();
-          hp.type = 'highpass'; hp.frequency.value = 3000;
-          const g2 = audioCtx.createGain(); g2.gain.value = 0.15;
+          hp.type = 'highpass'; hp.frequency.value = 2500;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.3;
           src.connect(hp); hp.connect(g2); g2.connect(audioCtx.destination);
           src.start();
         } else if (type === 'pokemon') {
+          // Epic dramatic chord
           [300, 400, 500, 600].forEach((freq, i) => {
             const osc = audioCtx.createOscillator();
             osc.type = 'triangle';
             osc.frequency.value = freq;
             osc.frequency.linearRampToValueAtTime(freq * 1.5, now + 0.5);
             const g = audioCtx.createGain();
-            g.gain.value = 0.07;
-            g.gain.linearRampToValueAtTime(0, now + 0.6);
+            g.gain.value = 0.15;
+            g.gain.linearRampToValueAtTime(0, now + 0.7);
             osc.connect(g); g.connect(audioCtx.destination);
-            osc.start(now + i * 0.1); osc.stop(now + 0.6);
+            osc.start(now + i * 0.1); osc.stop(now + 0.7);
           });
         } else if (type === 'dragon') {
+          // Deep roar
           const osc = audioCtx.createOscillator();
           osc.type = 'sawtooth';
           osc.frequency.value = 80;
-          osc.frequency.linearRampToValueAtTime(40, now + 1);
+          osc.frequency.linearRampToValueAtTime(35, now + 1.5);
           const g = audioCtx.createGain();
-          g.gain.value = 0.15;
-          g.gain.linearRampToValueAtTime(0, now + 1.2);
+          g.gain.value = 0.35;
+          g.gain.linearRampToValueAtTime(0, now + 1.8);
           osc.connect(g); g.connect(audioCtx.destination);
-          osc.start(); osc.stop(now + 1.2);
+          osc.start(); osc.stop(now + 1.8);
+          // Higher overtone
+          const osc2 = audioCtx.createOscillator();
+          osc2.type = 'sawtooth';
+          osc2.frequency.value = 160;
+          osc2.frequency.linearRampToValueAtTime(70, now + 1);
+          const g3 = audioCtx.createGain();
+          g3.gain.value = 0.15;
+          g3.gain.linearRampToValueAtTime(0, now + 1.2);
+          osc2.connect(g3); g3.connect(audioCtx.destination);
+          osc2.start(); osc2.stop(now + 1.2);
         } else if (type === 'superboost') {
           [150, 200, 300, 400, 500].forEach((freq, i) => {
             const osc = audioCtx.createOscillator();
@@ -300,7 +318,7 @@
             osc.frequency.value = freq;
             osc.frequency.linearRampToValueAtTime(freq * 2, now + 0.8);
             const g = audioCtx.createGain();
-            g.gain.value = 0.06;
+            g.gain.value = 0.12;
             g.gain.linearRampToValueAtTime(0, now + 1);
             osc.connect(g); g.connect(audioCtx.destination);
             osc.start(now + i * 0.05); osc.stop(now + 1);
@@ -2195,9 +2213,17 @@
         sharkLight.position.set(0, 0.2, 0);
         sGroup.add(sharkLight);
 
-        const angle = Math.random() * Math.PI * 2;
-        sGroup.position.set(Math.cos(angle) * 12, 0.3, Math.sin(angle) * 12);
-        sGroup.userData = { speed: 0.06 + Math.random() * 0.03, angle, target: null, biteTimer: 0, idx: i };
+        // Each shark gets a unique spread angle, orbit radius, speed, and phase
+        const angle = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+        const orbitR = 11 + i * 1.5 + Math.random();
+        sGroup.position.set(Math.cos(angle) * orbitR, 0.3, Math.sin(angle) * orbitR);
+        sGroup.userData = {
+          speed: 0.04 + i * 0.012 + Math.random() * 0.02,
+          angle, heading: angle, target: null, biteTimer: 0, idx: i,
+          orbitR, orbitPhase: Math.random() * Math.PI * 2,
+          yPhase: Math.random() * Math.PI * 2,
+          turnBias: (Math.random() - 0.5) * 0.02 // slight individual turn tendency
+        };
         scene.add(sGroup);
         sharkObjs.push(sGroup);
       }
@@ -2257,25 +2283,26 @@
             sd.biteTimer = 40;
           }
         } else {
-          // Smooth orbital patrol
-          const orbitR = 12;
+          // Smooth orbital patrol — each shark has its own orbit radius and phase
+          const myOrbitR = sd.orbitR || 12;
           const sx = shark.position.x, sz = shark.position.z;
           const currentR = Math.sqrt(sx*sx + sz*sz);
           const orbitAngle = Math.atan2(sx, sz);
           const tangent = orbitAngle + Math.PI * 0.5;
-          const distError = currentR - orbitR;
-          const desiredAngle = tangent + distError * 0.03 + Math.sin(t * 0.5 + si * 2) * 0.1;
+          const distError = currentR - myOrbitR;
+          // Individual weave pattern using unique phase and turn bias
+          const weave = Math.sin(t * 0.5 + (sd.orbitPhase || 0)) * 0.12 + (sd.turnBias || 0);
+          const desiredAngle = tangent + distError * 0.03 + weave;
           let angleDiff = desiredAngle - sd.heading;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
           angleDiffAbs = Math.abs(angleDiff);
           sd.heading += angleDiff * 0.06;
-          // Hard clamp: if too far out, force back toward orbit
-          if (currentR > orbitR + 5) {
+          if (currentR > myOrbitR + 5) {
             const inward = Math.atan2(-sx, -sz);
             sd.heading = inward + Math.PI * 0.3;
           }
-          const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + si) * 0.15);
+          const swimSpeed = sd.speed * (0.9 + Math.sin(t * 0.7 + (sd.yPhase || 0)) * 0.15);
           shark.position.x += Math.sin(sd.heading) * swimSpeed;
           shark.position.z += Math.cos(sd.heading) * swimSpeed;
         }
@@ -2288,7 +2315,7 @@
         });
 
         // Slower, smoother undulating vertical movement
-        shark.position.y = 0.3 + Math.sin(t * 1.0 + si * 1.5) * 0.15;
+        shark.position.y = 0.3 + Math.sin(t * (0.8 + sd.idx * 0.15) + (sd.yPhase || 0)) * 0.2;
 
         // Smooth lookAt using heading
         const lookTarget = new THREE.Vector3(
@@ -3349,7 +3376,8 @@
         }
         g.position.set(sx, sy, sz);
         g.userData = {
-          def, state: 'arriving', targetX, targetZ, targetY: 3 + Math.random() * 2,
+          def, state: 'arriving', targetX, targetZ, targetY: 3 + idx * 1.5 + Math.random(),
+          pkmIdx: idx, myTarget: null,
           atkTimer: 0, bobPhase: Math.random() * Math.PI * 2
         };
         scene.add(g);
@@ -3371,28 +3399,62 @@
         }
 
         if (ud.state === 'active') {
-          p.position.y = ud.targetY + Math.sin(ud.bobPhase) * 0.3;
+          // Individual bob pattern (different freq/amp per pokemon)
+          const bobFreq = 0.02 + (ud.pkmIdx || 0) * 0.008;
+          const bobAmp = 0.25 + (ud.pkmIdx || 0) * 0.1;
+          p.position.y = ud.targetY + Math.sin(ud.bobPhase) * bobAmp;
 
-          // Chase nearest monster
-          let closest = null, cDist = Infinity;
-          for (const m of monsters) {
-            if (m.userData.state !== 'approaching') continue;
-            const d = p.position.distanceTo(m.position);
-            if (d < cDist) { cDist = d; closest = m; }
-          }
-          if (closest && cDist > 3) {
-            const dir = closest.position.clone().sub(p.position).normalize();
-            p.position.add(dir.multiplyScalar(0.06));
-            p.lookAt(closest.position);
+          // Each pokemon picks a DIFFERENT monster (not all chasing the same one)
+          if (!ud.myTarget || ud.myTarget.userData?.state !== 'approaching' || !monsters.includes(ud.myTarget)) {
+            ud.myTarget = null;
+            // Build list of monsters not already targeted by other pokemon
+            const taken = new Set();
+            for (const op of pokemonObjs) {
+              if (op !== p && op.userData.myTarget) taken.add(op.userData.myTarget);
+            }
+            let closest = null, cDist = Infinity;
+            for (const m of monsters) {
+              if (m.userData.state !== 'approaching') continue;
+              if (taken.has(m)) continue; // skip if another pokemon already targets this one
+              const d = p.position.distanceTo(m.position);
+              if (d < cDist) { cDist = d; closest = m; }
+            }
+            // If all taken, just pick nearest anyway
+            if (!closest) {
+              for (const m of monsters) {
+                if (m.userData.state !== 'approaching') continue;
+                const d = p.position.distanceTo(m.position);
+                if (d < cDist) { cDist = d; closest = m; }
+              }
+            }
+            ud.myTarget = closest;
           }
 
-          // Fire projectile
+          // Chase with individual speed
+          const chaseSpeed = 0.04 + (ud.pkmIdx || 0) * 0.015;
+          if (ud.myTarget) {
+            const cDist = p.position.distanceTo(ud.myTarget.position);
+            if (cDist > 3) {
+              const dir = ud.myTarget.position.clone().sub(p.position).normalize();
+              p.position.add(dir.multiplyScalar(chaseSpeed));
+            }
+            p.lookAt(ud.myTarget.position);
+          } else {
+            // Patrol around own home position
+            const homeDir = new THREE.Vector3(ud.targetX, ud.targetY, ud.targetZ).sub(p.position);
+            if (homeDir.length() > 2) {
+              p.position.add(homeDir.normalize().multiplyScalar(0.03));
+            }
+          }
+
+          // Fire projectile at individual rate
+          const fireRate = 30 + (ud.pkmIdx || 0) * 8;
           ud.atkTimer++;
-          if (ud.atkTimer > 35 && closest) {
+          if (ud.atkTimer > fireRate && ud.myTarget) {
             ud.atkTimer = 0;
-            const dir = closest.position.clone().sub(p.position).normalize();
+            const dir = ud.myTarget.position.clone().sub(p.position).normalize();
             const proj = new THREE.Mesh(
-              new THREE.SphereGeometry(0.15, 6, 6),
+              new THREE.SphereGeometry(0.18, 6, 6),
               new THREE.MeshBasicMaterial({ color: ud.def.atk })
             );
             proj.position.copy(p.position);
