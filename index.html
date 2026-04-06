@@ -153,6 +153,146 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+    // ===== AUDIO SYSTEM =====
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+      try {
+        initAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        if (type === 'activate') {
+          [200, 300, 400].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            osc.frequency.linearRampToValueAtTime(freq * 1.5, now + 0.4);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.1;
+            g.gain.linearRampToValueAtTime(0, now + 0.5);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(now + i * 0.08); osc.stop(now + 0.5);
+          });
+        } else if (type === 'hit') {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.value = 150;
+          osc.frequency.linearRampToValueAtTime(50, now + 0.2);
+          const g = audioCtx.createGain();
+          g.gain.value = 0.12;
+          g.gain.linearRampToValueAtTime(0, now + 0.25);
+          osc.connect(g); g.connect(audioCtx.destination);
+          osc.start(); osc.stop(now + 0.25);
+        } else if (type === 'projectile') {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = 800;
+          osc.frequency.linearRampToValueAtTime(400, now + 0.1);
+          const g = audioCtx.createGain();
+          g.gain.value = 0.04;
+          g.gain.linearRampToValueAtTime(0, now + 0.12);
+          osc.connect(g); g.connect(audioCtx.destination);
+          osc.start(); osc.stop(now + 0.12);
+        } else if (type === 'lightning') {
+          const bufSize = audioCtx.sampleRate * 0.3;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 4) * 0.3;
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const lp = audioCtx.createBiquadFilter();
+          lp.type = 'lowpass'; lp.frequency.value = 300;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.25;
+          src.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
+          src.start();
+        } else if (type === 'water') {
+          const bufSize = audioCtx.sampleRate * 2;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t2 = i / audioCtx.sampleRate;
+            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2 * 2) * Math.exp(-t2 * 0.5) * 0.1;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const lp = audioCtx.createBiquadFilter();
+          lp.type = 'lowpass'; lp.frequency.value = 400;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.2;
+          src.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
+          src.start();
+        } else if (type === 'tornado') {
+          const bufSize = audioCtx.sampleRate * 3;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) {
+            const t2 = i / audioCtx.sampleRate;
+            d[i] = (Math.random() * 2 - 1) * Math.min(1, t2) * Math.exp(-t2 * 0.3) * 0.1;
+            d[i] += Math.sin(t2 * 60 + Math.sin(t2 * 8) * 10) * Math.exp(-t2 * 0.4) * 0.05;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const bp = audioCtx.createBiquadFilter();
+          bp.type = 'bandpass'; bp.frequency.value = 250; bp.Q.value = 2;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.3;
+          src.connect(bp); bp.connect(g2); g2.connect(audioCtx.destination);
+          src.start();
+        } else if (type === 'cobra') {
+          const bufSize = audioCtx.sampleRate * 0.5;
+          const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 3) * 0.15;
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const hp = audioCtx.createBiquadFilter();
+          hp.type = 'highpass'; hp.frequency.value = 3000;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.15;
+          src.connect(hp); hp.connect(g2); g2.connect(audioCtx.destination);
+          src.start();
+        } else if (type === 'pokemon') {
+          [300, 400, 500, 600].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            osc.frequency.linearRampToValueAtTime(freq * 1.5, now + 0.5);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.07;
+            g.gain.linearRampToValueAtTime(0, now + 0.6);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(now + i * 0.1); osc.stop(now + 0.6);
+          });
+        } else if (type === 'dragon') {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.value = 80;
+          osc.frequency.linearRampToValueAtTime(40, now + 1);
+          const g = audioCtx.createGain();
+          g.gain.value = 0.15;
+          g.gain.linearRampToValueAtTime(0, now + 1.2);
+          osc.connect(g); g.connect(audioCtx.destination);
+          osc.start(); osc.stop(now + 1.2);
+        } else if (type === 'superboost') {
+          [150, 200, 300, 400, 500].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.frequency.linearRampToValueAtTime(freq * 2, now + 0.8);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.06;
+            g.gain.linearRampToValueAtTime(0, now + 1);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(now + i * 0.05); osc.stop(now + 1);
+          });
+        }
+      } catch(e) {}
+    }
+
     // ===== SCENE SETUP =====
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -900,6 +1040,7 @@
     }
 
     function createMonster() {
+     try {
       const group = new THREE.Group();
       const size = 0.6 + Math.random() * 0.5;
       const bodyColor = MONSTER_COLORS[Math.floor(Math.random() * MONSTER_COLORS.length)];
@@ -1128,6 +1269,29 @@
 
       scene.add(group);
       monsters.push(group);
+      console.log('Monster created');
+     } catch(e) {
+      console.warn('createMonster failed:', e);
+      // Create a simple fallback monster
+      const group = new THREE.Group();
+      const size = 0.8;
+      const fb = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x44cc55, roughness: 0.7 })
+      );
+      fb.castShadow = true;
+      group.add(fb);
+      const spawnAngle = Math.random() * Math.PI * 2;
+      const spawnDist = 18 + Math.random() * 6;
+      group.position.set(Math.cos(spawnAngle) * spawnDist, 1.5, Math.sin(spawnAngle) * spawnDist);
+      group.userData = {
+        state: 'approaching', speed: 0.03, size, wobblePhase: Math.random() * Math.PI * 2,
+        flyVel: new THREE.Vector3(), hitTime: 0, currentDir: new THREE.Vector3(),
+        breathPhase: 0, bodyMesh: fb, spikes: [], baseEmissive: 0, eyeObjs: []
+      };
+      scene.add(group);
+      monsters.push(group);
+     }
     }
 
     // ===== PROJECTILES =====
@@ -1138,6 +1302,7 @@
 
     function fireProjectile() {
       if (!barrierActive) return;
+      playSound('projectile');
 
       // Find nearest approaching monster
       let closest = null, closestDist = Infinity;
@@ -1208,6 +1373,7 @@
     window.activateBarrier = function() {
       if (barrierActive) return;
       barrierActive = true;
+      playSound('activate');
       document.getElementById('shieldStatus').className = 'shield-status active';
       document.getElementById('shieldStatus').textContent = 'BOUCLIER ACTIF';
       document.getElementById('btnActivate').style.display = 'none';
@@ -1235,6 +1401,7 @@
     };
 
     window.triggerSuperBoost = function() {
+      playSound('superboost');
       superBoostActive = true;
       setTimeout(() => { superBoostActive = false; }, 5000);
     };
@@ -1242,6 +1409,7 @@
     // Helper: kill a monster
     function killMonster(m, t) {
       if (m.userData.state !== 'approaching') return;
+      playSound('hit');
       m.userData.state = 'hit';
       m.userData.hitTime = t;
       const pushDir = m.position.clone().normalize();
@@ -1264,6 +1432,7 @@
 
     window.triggerCobra = function() {
       if (cobraActive) return;
+      playSound('cobra');
       cobraActive = true; cobraTimer = 0;
       // Create cobra body segments
       cobraSegments.forEach(s => scene.remove(s));
@@ -1391,6 +1560,7 @@
 
     window.triggerLightning = function() {
       if (lightningActive) return;
+      playSound('lightning');
       lightningActive = true; lightningTimer = 0;
       lightningBolts.forEach(b => scene.remove(b));
       lightningBolts = [];
@@ -1433,6 +1603,7 @@
         if (targets.length) {
           const target = targets[Math.floor(Math.random() * targets.length)];
           createBolt(target.position);
+          playSound('lightning');
           killMonster(target, t);
         }
       }
@@ -1458,6 +1629,7 @@
 
     window.triggerFishWave = function() {
       if (fishWaveActive) return;
+      playSound('water');
       fishWaveActive = true; fishWaveTimer = 0;
       // Create water plane with emissive glow for night visibility
       const wGeo = new THREE.CircleGeometry(25, 64);
@@ -1669,6 +1841,7 @@
 
     window.triggerSharkWave = function() {
       if (sharkWaveActive) return;
+      playSound('water');
       sharkWaveActive = true; sharkWaveTimer = 0;
       // Dark ocean water with emissive glow for night visibility
       const wGeo = new THREE.CircleGeometry(25, 64);
@@ -1912,6 +2085,7 @@
 
     window.triggerTornado = function() {
       if (tornadoActive) return;
+      playSound('tornado');
       tornadoActive = true; tornadoTimer = 0; tornadoCaught = [];
       // Build particle-based tornado funnel
       tornadoObj = new THREE.Group();
@@ -2914,6 +3088,7 @@
 
     window.triggerPokemon = function() {
       if (pokemonActive) return;
+      playSound('pokemon');
       pokemonActive = true; pokemonTimer = 0;
       pokemonObjs.forEach(p => scene.remove(p)); pokemonObjs = [];
       pokemonAttacks.forEach(a => scene.remove(a)); pokemonAttacks = [];
@@ -3035,6 +3210,7 @@
 
     window.triggerMetalWave = function() {
       if (metalWaveActive) return;
+      playSound('dragon');
       metalWaveActive = true; metalWaveTimer = 0;
       dragonSegments.forEach(s => scene.remove(s));
       dragonSegments = [];
@@ -3119,6 +3295,7 @@
     // ===== ULTRA BOOST =====
     window.triggerUltraBoost = function() {
       if (!barrierActive) return;
+      playSound('superboost');
       superBoostActive = true;
       if (!cobraActive) window.triggerCobra();
       if (!lightningActive) setTimeout(() => window.triggerLightning(), 500);
