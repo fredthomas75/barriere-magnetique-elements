@@ -201,17 +201,33 @@
           osc.connect(g); g.connect(audioCtx.destination);
           osc.start(); osc.stop(now + 0.12);
         } else if (type === 'lightning') {
+          // Sharp crack — louder
           const bufSize = audioCtx.sampleRate * 0.3;
           const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
           const d = buf.getChannelData(0);
-          for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 4) * 0.3;
+          for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSize * 4) * 0.5;
           const src = audioCtx.createBufferSource();
           src.buffer = buf;
           const lp = audioCtx.createBiquadFilter();
           lp.type = 'lowpass'; lp.frequency.value = 300;
-          const g2 = audioCtx.createGain(); g2.gain.value = 0.25;
+          const g2 = audioCtx.createGain(); g2.gain.value = 0.5;
           src.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
           src.start();
+          // Low rumble after crack
+          const rumbleSize = audioCtx.sampleRate * 1.0;
+          const rumbleBuf = audioCtx.createBuffer(1, rumbleSize, audioCtx.sampleRate);
+          const rd = rumbleBuf.getChannelData(0);
+          for (let i = 0; i < rumbleSize; i++) {
+            const rt = i / audioCtx.sampleRate;
+            rd[i] = (Math.random() * 2 - 1) * Math.sin(rt * 60 * Math.PI * 2) * Math.exp(-rt * 2) * 0.4;
+          }
+          const rumbleSrc = audioCtx.createBufferSource();
+          rumbleSrc.buffer = rumbleBuf;
+          const rumbleLp = audioCtx.createBiquadFilter();
+          rumbleLp.type = 'lowpass'; rumbleLp.frequency.value = 80;
+          const rumbleG = audioCtx.createGain(); rumbleG.gain.value = 0.3;
+          rumbleSrc.connect(rumbleLp); rumbleLp.connect(rumbleG); rumbleG.connect(audioCtx.destination);
+          rumbleSrc.start(now + 0.15);
         } else if (type === 'water') {
           const bufSize = audioCtx.sampleRate * 2;
           const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
@@ -1442,29 +1458,86 @@
     let cobraSegments = []; // 3D segments
     const COBRA_SEGS = 20;
 
+    let cobraVenomParticles = []; // venom drip particles
+
     window.triggerCobra = function() {
       if (cobraActive) return;
       playSound('cobra');
       cobraActive = true; cobraTimer = 0;
-      // Create cobra body segments
+      // Create cobra body segments with tapering and scale pattern
       cobraSegments.forEach(s => scene.remove(s));
       cobraSegments = [];
-      const cobraMat = new THREE.MeshStandardMaterial({ color: 0x22aa22, roughness: 0.4, metalness: 0.3 });
+      cobraVenomParticles.forEach(p => scene.remove(p));
+      cobraVenomParticles = [];
+
+      const darkGreen = 0x1a5a1a;
+      const lightGreen = 0x228822;
+
       for (let i = 0; i < COBRA_SEGS; i++) {
-        const r = 0.3 - i * 0.01;
-        const seg = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.1, r), 8, 6), cobraMat);
+        const p = i / COBRA_SEGS;
+        // Tapering: head is biggest, tail is smallest
+        const r = 0.35 * (1 - p * 0.7);
+        const segColor = (i % 2 === 0) ? darkGreen : lightGreen;
+        const segMat = new THREE.MeshStandardMaterial({
+          color: segColor, roughness: 0.35, metalness: 0.3,
+          emissive: segColor, emissiveIntensity: 0.08
+        });
+        const seg = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.08, r), 8, 6), segMat);
         seg.castShadow = true;
         scene.add(seg);
         cobraSegments.push(seg);
       }
-      // Head is segment 0 — make it bigger with eyes
-      cobraSegments[0].scale.set(1.5, 1.2, 1.3);
-      const eyeMat2 = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-      [-1,1].forEach(side => {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), eyeMat2);
-        eye.position.set(side * 0.15, 0.12, 0.2);
-        cobraSegments[0].add(eye);
-      });
+
+      // Head is segment 0 — cobra hood shape
+      if (cobraSegments.length > 0) {
+        // Flatten head into hood shape
+        cobraSegments[0].scale.set(2.0, 1.5, 0.5);
+
+        // Hood disc behind head
+        const hoodMat = new THREE.MeshStandardMaterial({
+          color: 0x1a5a1a, roughness: 0.35, metalness: 0.3,
+          emissive: 0x0a2a0a, emissiveIntensity: 0.15, side: THREE.DoubleSide
+        });
+        const hood = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), hoodMat);
+        hood.position.set(0, 0.05, -0.15);
+        hood.rotation.y = Math.PI;
+        cobraSegments[0].add(hood);
+
+        // Hood markings (lighter pattern on hood)
+        const hoodMarkMat = new THREE.MeshBasicMaterial({ color: 0x44bb44, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+        const hoodMark = new THREE.Mesh(new THREE.CircleGeometry(0.2, 8), hoodMarkMat);
+        hoodMark.position.set(0, 0.06, -0.14);
+        hoodMark.rotation.y = Math.PI;
+        cobraSegments[0].add(hoodMark);
+
+        // Menacing red eyes
+        const eyeMat2 = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+        [-1, 1].forEach(side => {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat2);
+          eye.position.set(side * 0.12, 0.08, 0.25);
+          cobraSegments[0].add(eye);
+          // Eye glow
+          const eyeGlow = new THREE.PointLight(0xff2200, 0.3, 2);
+          eyeGlow.position.copy(eye.position);
+          cobraSegments[0].add(eyeGlow);
+        });
+
+        // Forked tongue (two thin red cones)
+        const tongueMat = new THREE.MeshBasicMaterial({ color: 0xff1111 });
+        [-1, 1].forEach(side => {
+          const tongue = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.25, 4), tongueMat);
+          tongue.position.set(side * 0.03, -0.02, 0.4);
+          tongue.rotation.x = -Math.PI / 2;
+          tongue.rotation.z = side * 0.15;
+          tongue.name = 'tongue';
+          cobraSegments[0].add(tongue);
+        });
+
+        // Head self-illumination
+        const headLight = new THREE.PointLight(0x22aa22, 0.6, 4);
+        headLight.position.set(0, 0.1, 0.2);
+        cobraSegments[0].add(headLight);
+      }
     };
 
     let cobraHeadAngle = 0;
@@ -1544,6 +1617,48 @@
       // Head looks in movement direction
       head.lookAt(head.position.x + Math.sin(cobraHeadAngle), hy, head.position.z + Math.cos(cobraHeadAngle));
 
+      // Animate forked tongue in/out
+      head.traverse(child => {
+        if (child.name === 'tongue') {
+          const tonguePhase = Math.sin(t * 6) * 0.5 + 0.5; // 0 to 1
+          child.scale.y = 0.3 + tonguePhase * 0.7;
+          child.position.z = 0.35 + tonguePhase * 0.1;
+        }
+      });
+
+      // Venom drip when striking/biting
+      if (cobraStriking && cobraTimer % 5 === 0) {
+        const headPos = head.position;
+        const headDir = new THREE.Vector3(Math.sin(cobraHeadAngle), 0, Math.cos(cobraHeadAngle));
+        for (let vp = 0; vp < 2; vp++) {
+          const venomMat = new THREE.MeshBasicMaterial({
+            color: 0x44ff44, transparent: true, opacity: 0.8,
+            blending: THREE.AdditiveBlending, depthWrite: false
+          });
+          const venom = new THREE.Mesh(new THREE.SphereGeometry(0.05 + Math.random() * 0.03, 4, 4), venomMat);
+          venom.position.set(
+            headPos.x + headDir.x * 0.5 + (Math.random() - 0.5) * 0.2,
+            headPos.y - 0.1,
+            headPos.z + headDir.z * 0.5 + (Math.random() - 0.5) * 0.2
+          );
+          venom.userData = { life: 20 };
+          scene.add(venom);
+          cobraVenomParticles.push(venom);
+        }
+      }
+
+      // Update venom particles (drip downward)
+      for (let i = cobraVenomParticles.length - 1; i >= 0; i--) {
+        const vp = cobraVenomParticles[i];
+        vp.userData.life--;
+        vp.position.y -= 0.03;
+        vp.material.opacity = vp.userData.life / 20;
+        if (vp.userData.life <= 0) {
+          scene.remove(vp);
+          cobraVenomParticles.splice(i, 1);
+        }
+      }
+
       // Body follows head with smooth delay (serpentine)
       for (let i = 1; i < cobraSegments.length; i++) {
         const prev = cobraSegments[i-1].position;
@@ -1563,6 +1678,8 @@
         cobraActive = false;
         cobraSegments.forEach(s => scene.remove(s));
         cobraSegments = [];
+        cobraVenomParticles.forEach(p => scene.remove(p));
+        cobraVenomParticles = [];
       }
     }
 
@@ -1578,6 +1695,8 @@
       lightningBolts = [];
     };
 
+    let lightningFlashFrames = 0; // screen flash counter
+
     function createBolt(target) {
       const points = [];
       const startY = 25;
@@ -1590,19 +1709,39 @@
           target.z + (1-p) * (Math.random()-0.5) * 6
         ));
       }
-      const geo = new THREE.BufferGeometry().setFromPoints(points);
-      const mat = new THREE.LineBasicMaterial({ color: 0xaaddff, linewidth: 2, transparent: true, opacity: 1 });
-      const bolt = new THREE.Line(geo, mat);
-      bolt.userData = { life: 15 };
+
+      // Core bolt — TubeGeometry for visible thickness
+      const curve = new THREE.CatmullRomCurve3(points);
+      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.15, 6, false);
+      const tubeMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 1,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      const bolt = new THREE.Mesh(tubeGeo, tubeMat);
+      bolt.userData = { life: 15, isTube: true };
       scene.add(bolt);
       lightningBolts.push(bolt);
 
-      // Glow bolt
-      const mat2 = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1, transparent: true, opacity: 0.8 });
-      const bolt2 = new THREE.Line(geo.clone(), mat2);
-      bolt2.userData = { life: 12 };
-      scene.add(bolt2);
-      lightningBolts.push(bolt2);
+      // Outer glow tube — wider, semi-transparent
+      const glowGeo = new THREE.TubeGeometry(curve, 20, 0.4, 6, false);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x88bbff, transparent: true, opacity: 0.35,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      const glowBolt = new THREE.Mesh(glowGeo, glowMat);
+      glowBolt.userData = { life: 12, isTube: true };
+      scene.add(glowBolt);
+      lightningBolts.push(glowBolt);
+
+      // Point light at strike position
+      const strikeLight = new THREE.PointLight(0xeeeeff, 3, 15);
+      strikeLight.position.copy(points[points.length - 1]);
+      strikeLight.userData = { life: 10, isTube: false, isLight: true };
+      scene.add(strikeLight);
+      lightningBolts.push(strikeLight);
+
+      // Screen flash
+      lightningFlashFrames = 5;
     }
 
     function updateLightning(t) {
@@ -1620,12 +1759,25 @@
         }
       }
 
+      // Screen flash effect
+      if (lightningFlashFrames > 0) {
+        renderer.toneMappingExposure += 0.5;
+        lightningFlashFrames--;
+      }
+
       // Update bolt lifetimes
       for (let i = lightningBolts.length - 1; i >= 0; i--) {
-        lightningBolts[i].userData.life--;
-        lightningBolts[i].material.opacity = lightningBolts[i].userData.life / 15;
-        if (lightningBolts[i].userData.life <= 0) {
-          scene.remove(lightningBolts[i]);
+        const b = lightningBolts[i];
+        b.userData.life--;
+        if (b.userData.isLight) {
+          // Fade point light intensity
+          b.intensity = (b.userData.life / 10) * 3;
+        } else {
+          b.material.opacity = b.userData.life / 15;
+        }
+        if (b.userData.life <= 0) {
+          scene.remove(b);
+          if (b.userData.isTube && b.geometry) b.geometry.dispose();
           lightningBolts.splice(i, 1);
         }
       }
@@ -1661,67 +1813,81 @@
         const fGroup = new THREE.Group();
         const fishColor = new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
         const fishMat = new THREE.MeshStandardMaterial({
-          color: fishColor, roughness: 0.4, metalness: 0.3,
+          color: fishColor, roughness: 0.3, metalness: 0.4,
           emissive: fishColor, emissiveIntensity: 0.2
         });
 
-        // Oval body
-        const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), fishMat);
-        body.scale.set(1.8, 0.9, 0.7);
+        // Proper elongated fish body
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 10), fishMat);
+        body.scale.set(2.0, 0.8, 0.6);
         fGroup.add(body);
 
-        // Fan-shaped tail (two overlapping planes)
+        // Proper fan-shaped tail fin with curved edge
         const tailShape = new THREE.Shape();
         tailShape.moveTo(0, 0);
-        tailShape.lineTo(-0.3, 0.25);
-        tailShape.lineTo(-0.35, 0);
-        tailShape.lineTo(-0.3, -0.25);
+        tailShape.lineTo(-0.15, 0.3);
+        tailShape.quadraticCurveTo(-0.45, 0.2, -0.4, 0);
+        tailShape.quadraticCurveTo(-0.45, -0.2, -0.15, -0.3);
         tailShape.closePath();
         const tailGeo = new THREE.ShapeGeometry(tailShape);
+        const tailPivot = new THREE.Group();
+        tailPivot.position.set(-0.6, 0, 0);
         const tail1 = new THREE.Mesh(tailGeo, fishMat);
-        tail1.position.set(-0.55, 0, 0);
-        tail1.rotation.y = 0.15;
-        fGroup.add(tail1);
+        tail1.rotation.y = 0.1;
+        tailPivot.add(tail1);
         const tail2 = new THREE.Mesh(tailGeo, fishMat);
-        tail2.position.set(-0.55, 0, 0);
-        tail2.rotation.y = -0.15;
-        fGroup.add(tail2);
+        tail2.rotation.y = -0.1;
+        tailPivot.add(tail2);
+        tailPivot.name = 'tailPivot';
+        fGroup.add(tailPivot);
 
-        // Dorsal fin on top (triangle)
+        // Dorsal fin on top (taller triangle)
         const dorsalShape = new THREE.Shape();
-        dorsalShape.moveTo(0.1, 0);
-        dorsalShape.lineTo(0, 0.2);
-        dorsalShape.lineTo(-0.15, 0);
+        dorsalShape.moveTo(0.15, 0);
+        dorsalShape.lineTo(0, 0.3);
+        dorsalShape.lineTo(-0.2, 0);
         dorsalShape.closePath();
         const dorsalGeo = new THREE.ShapeGeometry(dorsalShape);
         const dorsal = new THREE.Mesh(dorsalGeo, fishMat);
-        dorsal.position.set(0, 0.25, 0);
+        dorsal.position.set(0, 0.22, 0);
         dorsal.rotation.y = Math.PI / 2;
         fGroup.add(dorsal);
 
-        // Pectoral fins (tiny planes on sides)
+        // Ventral fin (small triangle on bottom)
+        const ventralShape = new THREE.Shape();
+        ventralShape.moveTo(0.05, 0);
+        ventralShape.lineTo(0, -0.12);
+        ventralShape.lineTo(-0.1, 0);
+        ventralShape.closePath();
+        const ventralGeo = new THREE.ShapeGeometry(ventralShape);
+        const ventral = new THREE.Mesh(ventralGeo, fishMat);
+        ventral.position.set(-0.1, -0.2, 0);
+        ventral.rotation.y = Math.PI / 2;
+        fGroup.add(ventral);
+
+        // Pectoral fins (angled planes on sides)
         [-1, 1].forEach(side => {
           const pFinShape = new THREE.Shape();
           pFinShape.moveTo(0, 0);
-          pFinShape.lineTo(-0.12, -0.08 * side);
-          pFinShape.lineTo(-0.08, 0);
+          pFinShape.lineTo(-0.15, -0.1 * side);
+          pFinShape.lineTo(-0.12, 0.02 * side);
           pFinShape.closePath();
           const pFinGeo = new THREE.ShapeGeometry(pFinShape);
           const pFin = new THREE.Mesh(pFinGeo, fishMat);
-          pFin.position.set(0.05, -0.05, side * 0.2);
-          pFin.rotation.x = side * 0.4;
+          pFin.position.set(0.1, -0.08, side * 0.18);
+          pFin.rotation.x = side * 0.5;
           fGroup.add(pFin);
         });
 
-        // Eyes on each side
+        // Eyes on each side (larger, more detailed)
         const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
         [-1, 1].forEach(side => {
-          const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), eyeWhiteMat);
-          eyeWhite.position.set(0.25, 0.08, side * 0.19);
+          const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), eyeWhiteMat);
+          eyeWhite.position.set(0.3, 0.06, side * 0.17);
           fGroup.add(eyeWhite);
-          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyePupilMat);
-          pupil.position.set(0.27, 0.08, side * 0.21);
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyePupilMat);
+          pupil.position.set(0.33, 0.06, side * 0.19);
           fGroup.add(pupil);
         });
 
@@ -1836,6 +2002,13 @@
 
         // Fast tail wiggle (high frequency oscillation)
         fish.rotation.y += Math.sin(t * 12 + fi * 3) * 0.06;
+
+        // Animate tail fin pivot rotation
+        fish.traverse(child => {
+          if (child.name === 'tailPivot') {
+            child.rotation.y = Math.sin(t * 14 + fi * 3) * 0.35;
+          }
+        });
 
         fish.position.y = 0.3 + Math.sin(t * 3 + fi) * 0.15;
       }
@@ -1956,25 +2129,66 @@
           sGroup.add(eye);
         });
 
-        // Open mouth with teeth
-        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x1a0a0a });
-        const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mouthMat);
-        mouth.scale.set(1, 0.5, 1);
+        // Snout (pointed nose)
+        const snoutMat = new THREE.MeshStandardMaterial({ color: 0x4a5a6a, roughness: 0.5, emissive: 0x223344, emissiveIntensity: 0.3 });
+        const snout = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 8), snoutMat);
+        snout.rotation.z = -Math.PI / 2;
+        snout.position.set(1.05, 0, 0);
+        sGroup.add(snout);
+
+        // Mouth (hidden by default, visible when hunting)
+        const mouthGroup = new THREE.Group();
+        mouthGroup.name = 'mouthGroup';
+        mouthGroup.visible = false;
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x2a0a0a });
+        const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), mouthMat);
+        mouth.scale.set(1, 0.6, 1);
         mouth.position.set(0.95, -0.05, 0);
-        sGroup.add(mouth);
-        // Teeth (small white cones inside mouth)
+        mouthGroup.add(mouth);
+        // Upper teeth row
         const toothMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        for (let ti = 0; ti < 6; ti++) {
-          const toothAngle = (ti / 6) * Math.PI * 2;
-          const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), toothMat);
-          tooth.position.set(
-            0.92,
-            -0.05 + Math.sin(toothAngle) * 0.07,
-            Math.cos(toothAngle) * 0.07
-          );
+        for (let ti = 0; ti < 8; ti++) {
+          const toothAngle = (ti / 8) * Math.PI; // upper half
+          const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.07, 4), toothMat);
+          tooth.position.set(0.93, -0.02 + Math.sin(toothAngle) * 0.08, Math.cos(toothAngle) * 0.08);
           tooth.rotation.z = -Math.PI / 2;
-          sGroup.add(tooth);
+          mouthGroup.add(tooth);
         }
+        // Lower teeth row
+        for (let ti = 0; ti < 8; ti++) {
+          const toothAngle = Math.PI + (ti / 8) * Math.PI; // lower half
+          const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.06, 4), toothMat);
+          tooth.position.set(0.93, -0.02 + Math.sin(toothAngle) * 0.08, Math.cos(toothAngle) * 0.08);
+          tooth.rotation.z = -Math.PI / 2;
+          mouthGroup.add(tooth);
+        }
+        sGroup.add(mouthGroup);
+
+        // Second smaller dorsal fin (rear)
+        const rearDorsalVerts = new Float32Array([
+          -0.3, 0.25, 0,   -0.35, 0.45, 0,   -0.55, 0.25, 0
+        ]);
+        const rearDorsalGeo = new THREE.BufferGeometry();
+        rearDorsalGeo.setAttribute('position', new THREE.BufferAttribute(rearDorsalVerts, 3));
+        rearDorsalGeo.computeVertexNormals();
+        const rearDorsal = new THREE.Mesh(rearDorsalGeo, sharkMat);
+        sGroup.add(rearDorsal);
+        const rearDorsalBack = new THREE.Mesh(rearDorsalGeo, sharkMat);
+        rearDorsalBack.scale.z = -1;
+        sGroup.add(rearDorsalBack);
+
+        // Anal fin (small, bottom rear)
+        const analFinVerts = new Float32Array([
+          -0.4, -0.2, 0,   -0.45, -0.35, 0,   -0.6, -0.2, 0
+        ]);
+        const analFinGeo = new THREE.BufferGeometry();
+        analFinGeo.setAttribute('position', new THREE.BufferAttribute(analFinVerts, 3));
+        analFinGeo.computeVertexNormals();
+        const analFin = new THREE.Mesh(analFinGeo, sharkMat);
+        sGroup.add(analFin);
+        const analFinBack = new THREE.Mesh(analFinGeo, sharkMat);
+        analFinBack.scale.z = -1;
+        sGroup.add(analFinBack);
 
         // Self-illumination PointLight for night visibility
         const sharkLight = new THREE.PointLight(0x4488bb, 0.5, 5);
@@ -2065,6 +2279,13 @@
           shark.position.x += Math.sin(sd.heading) * swimSpeed;
           shark.position.z += Math.cos(sd.heading) * swimSpeed;
         }
+
+        // Show teeth when hunting
+        shark.traverse(child => {
+          if (child.name === 'mouthGroup') {
+            child.visible = !!sd.target;
+          }
+        });
 
         // Slower, smoother undulating vertical movement
         shark.position.y = 0.3 + Math.sin(t * 1.0 + si * 1.5) * 0.15;
@@ -3220,45 +3441,104 @@
     let dragonSegments = [];
     const DRAGON_SEGS = 25;
 
+    let dragonFireParticles = []; // fire breath particles
+
     window.triggerMetalWave = function() {
       if (metalWaveActive) return;
       playSound('dragon');
       metalWaveActive = true; metalWaveTimer = 0;
       dragonSegments.forEach(s => scene.remove(s));
       dragonSegments = [];
+      dragonFireParticles.forEach(p => scene.remove(p));
+      dragonFireParticles = [];
+
+      const redMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.3, metalness: 0.5, emissive: 0x331111, emissiveIntensity: 0.2 });
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.3, metalness: 0.6, emissive: 0x332200, emissiveIntensity: 0.2 });
+
       for (let i = 0; i < DRAGON_SEGS; i++) {
         const p = i / DRAGON_SEGS;
         const r = 0.4 - p * 0.012;
+        // Alternate red body with gold belly segments
+        const mat = (i % 2 === 0) ? redMat.clone() : goldMat.clone();
         const seg = new THREE.Mesh(
           new THREE.SphereGeometry(Math.max(0.1, r), 8, 6),
-          new THREE.MeshStandardMaterial({
-            color: i % 3 === 0 ? 0xffcc00 : 0xcc2222,
-            roughness: 0.3, metalness: 0.5
-          })
+          mat
         );
         seg.castShadow = true;
+
+        // Add small legs every 6 segments (not on head or last few)
+        if (i > 0 && i < DRAGON_SEGS - 3 && i % 6 === 0) {
+          const legMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.4, metalness: 0.4 });
+          [-1, 1].forEach(side => {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.35, 6), legMat);
+            leg.position.set(side * 0.2, -0.2, 0);
+            leg.rotation.z = side * 0.3;
+            seg.add(leg);
+            // Claws
+            for (let c = -1; c <= 1; c++) {
+              const claw = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+              claw.position.set(side * 0.2 + c * 0.02, -0.38, c * 0.02);
+              claw.rotation.x = Math.PI;
+              seg.add(claw);
+            }
+          });
+        }
+
         scene.add(seg);
         dragonSegments.push(seg);
       }
-      // Dragon head decorations
+
+      // Dragon head — 3x larger with snout shape
       if (dragonSegments.length > 0) {
-        dragonSegments[0].scale.set(1.8, 1.5, 1.5);
-        // Antlers
-        [-1,1].forEach(side => {
-          const antler = new THREE.Mesh(
-            new THREE.ConeGeometry(0.05, 0.5, 4),
-            new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.6 })
+        dragonSegments[0].scale.set(3.0, 2.0, 2.5); // elongated snout
+        // Deer-like branching antlers
+        const antlerMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.7, roughness: 0.2 });
+        [-1, 1].forEach(side => {
+          // Main antler trunk
+          const trunk = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.6, 5), antlerMat);
+          trunk.position.set(side * 0.15, 0.25, 0.05);
+          trunk.rotation.z = side * 0.5;
+          dragonSegments[0].add(trunk);
+          // Branch 1
+          const branch1 = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.3, 4), antlerMat);
+          branch1.position.set(side * 0.22, 0.45, 0.03);
+          branch1.rotation.z = side * 0.9;
+          dragonSegments[0].add(branch1);
+          // Branch 2
+          const branch2 = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.2, 4), antlerMat);
+          branch2.position.set(side * 0.18, 0.35, -0.03);
+          branch2.rotation.z = side * 1.2;
+          branch2.rotation.x = 0.3;
+          dragonSegments[0].add(branch2);
+        });
+        // Glowing yellow eyes
+        [-1, 1].forEach(side => {
+          const eye = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
           );
-          antler.position.set(side * 0.2, 0.3, 0.1);
-          antler.rotation.z = side * 0.4;
-          dragonSegments[0].add(antler);
-        });
-        // Eyes
-        [-1,1].forEach(side => {
-          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), new THREE.MeshBasicMaterial({color:0xffff00}));
-          eye.position.set(side * 0.15, 0.08, 0.3);
+          eye.position.set(side * 0.1, 0.06, 0.2);
           dragonSegments[0].add(eye);
+          // Eye glow light
+          const eyeLight = new THREE.PointLight(0xffff00, 0.3, 2);
+          eyeLight.position.copy(eye.position);
+          dragonSegments[0].add(eyeLight);
         });
+        // Whisker-like appendages (thin cylinders from snout)
+        [-1, 1].forEach(side => {
+          const whiskerMat = new THREE.MeshBasicMaterial({ color: 0xffddaa });
+          for (let w = 0; w < 2; w++) {
+            const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.002, 0.5, 4), whiskerMat);
+            whisker.position.set(side * 0.08, -0.02 + w * 0.04, 0.25);
+            whisker.rotation.z = side * (0.6 + w * 0.3);
+            whisker.rotation.x = -0.2;
+            dragonSegments[0].add(whisker);
+          }
+        });
+        // Head self-illumination
+        const headLight = new THREE.PointLight(0xff6600, 1.0, 6);
+        headLight.position.set(0, 0, 0.3);
+        dragonSegments[0].add(headLight);
       }
     };
 
@@ -3279,17 +3559,57 @@
         for (let i = 1; i < dragonSegments.length; i++) {
           const prev = dragonSegments[i-1].position;
           dragonSegments[i].position.lerp(prev, 0.12);
-          dragonSegments[i].position.y = hy - Math.sin(t * 3 + i * 0.4) * 0.8;
+          // More dramatic Y undulation (amplitude 1.5)
+          dragonSegments[i].position.y = hy - Math.sin(t * 3 + i * 0.4) * 1.5;
         }
       }
 
-      // Catch and fling monsters
+      // Fire breath: when near a monster, spawn orange emissive particles
+      let nearMonster = false;
       for (const m of monsters) {
         if (m.userData.state !== 'approaching') continue;
+        if (dragonSegments.length && dragonSegments[0].position.distanceTo(m.position) < 5) {
+          nearMonster = true;
+        }
         if (dragonSegments.length && dragonSegments[0].position.distanceTo(m.position) < 2) {
           killMonster(m, t);
-          // Extra upward launch
           m.userData.flyVel.y = 0.4;
+        }
+      }
+
+      // Spawn fire breath particles when near monsters
+      if (nearMonster && dragonSegments.length > 0 && metalWaveTimer % 3 === 0) {
+        const headPos = dragonSegments[0].position;
+        const headDir = new THREE.Vector3(-headPos.x, 0, -headPos.z).normalize(); // faces center
+        for (let fp = 0; fp < 3; fp++) {
+          const fireMat = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff6600 : 0xffaa00,
+            transparent: true, opacity: 0.9,
+            blending: THREE.AdditiveBlending, depthWrite: false
+          });
+          const fireParticle = new THREE.Mesh(new THREE.SphereGeometry(0.12 + Math.random() * 0.1, 6, 4), fireMat);
+          fireParticle.position.set(
+            headPos.x + headDir.x * (0.8 + Math.random() * 0.5) + (Math.random() - 0.5) * 0.4,
+            headPos.y + (Math.random() - 0.5) * 0.3,
+            headPos.z + headDir.z * (0.8 + Math.random() * 0.5) + (Math.random() - 0.5) * 0.4
+          );
+          fireParticle.userData = { life: 12, vel: headDir.clone().multiplyScalar(0.15 + Math.random() * 0.1) };
+          scene.add(fireParticle);
+          dragonFireParticles.push(fireParticle);
+        }
+      }
+
+      // Update fire particles
+      for (let i = dragonFireParticles.length - 1; i >= 0; i--) {
+        const fp = dragonFireParticles[i];
+        fp.userData.life--;
+        fp.position.add(fp.userData.vel);
+        fp.position.y += 0.02; // rise
+        fp.material.opacity = fp.userData.life / 12;
+        fp.scale.multiplyScalar(0.92);
+        if (fp.userData.life <= 0) {
+          scene.remove(fp);
+          dragonFireParticles.splice(i, 1);
         }
       }
 
@@ -3301,6 +3621,7 @@
       if (metalWaveTimer > 540) {
         metalWaveActive = false;
         dragonSegments.forEach(s => scene.remove(s)); dragonSegments = [];
+        dragonFireParticles.forEach(p => scene.remove(p)); dragonFireParticles = [];
       }
     }
 
