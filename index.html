@@ -235,7 +235,7 @@
     scene.add(hemiLight);
 
     // Barrier glow light
-    const barrierLight = new THREE.PointLight(0x00ff88, 0, 20);
+    const barrierLight = new THREE.PointLight(0x00ff88, 0, 35);
     barrierLight.position.set(0, 4, 0);
     scene.add(barrierLight);
 
@@ -445,8 +445,8 @@
       const fogColor = new THREE.Color(fr, fg, fb);
       const wCode = weather.weatherCode;
       const isFog = (wCode === 45 || wCode === 48);
-      const fogNear = isFog ? 5 : 40;
-      const fogFar = isFog ? 30 : 80;
+      const fogNear = isFog ? 5 : (50 + d * 20);
+      const fogFar = isFog ? 30 : (120 + d * 40);
       scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
 
       // Lighting
@@ -454,11 +454,11 @@
       sunLight.color.setHSL(0.1, 0.6, 0.5 + d * 0.5);
       const sunAngle = (daylight - 0.5) * Math.PI;
       sunLight.position.set(Math.cos(sunAngle) * 20, Math.sin(sunAngle) * 20 + 5, 8);
-      moonLight.intensity = (1 - d) * 0.2;
-      ambientLight.intensity = 0.15 + d * 0.4;
-      ambientLight.color.setHSL(0.6, 0.3, 0.3 + d * 0.4);
-      renderer.toneMappingExposure = 0.5 + d * 0.8;
-      hemiLight.intensity = 0.15 + d * 0.3;
+      moonLight.intensity = (1 - d) * 0.5;
+      ambientLight.intensity = 0.35 + d * 0.35;
+      ambientLight.color.setHSL(0.6, 0.2, 0.4 + d * 0.3);
+      renderer.toneMappingExposure = 0.8 + d * 0.5;
+      hemiLight.intensity = 0.3 + d * 0.3;
 
       // Stars
       const starOpacity = d < 0.3 ? 1.0 - d / 0.3 : d < 0.5 ? (0.5 - d) / 0.2 * 0.3 : 0;
@@ -554,7 +554,8 @@
     // ===== GROUND =====
     const groundGeo = new THREE.PlaneGeometry(60, 60);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x2a5a1a, roughness: 0.9, metalness: 0.0
+      color: 0x2a5a1a, roughness: 0.9, metalness: 0.0,
+      emissive: 0x0a1a08, emissiveIntensity: 0.3
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -607,7 +608,7 @@
     })();
 
     const bodyGeo = new THREE.BoxGeometry(8, 6, 6);
-    const bodyMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85, metalness: 0.05 });
+    const bodyMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85, metalness: 0.05, emissive: 0x1a0a05, emissiveIntensity: 0.2 });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 3;
     body.castShadow = true;
@@ -789,10 +790,10 @@
           float sparkle = sin(vUv.x * 100.0 + uTime * 3.0) * sin(vUv.y * 80.0 - uTime * 2.0);
           sparkle = pow(max(sparkle, 0.0), 8.0);
 
-          float alpha = (fresnel * 0.6 + hex * 0.15 + wave * 0.1 + sparkle * 0.3) * uProgress;
-          vec3 col = uColor * (1.0 + fresnel * 0.5 + sparkle * 2.0);
+          float alpha = (fresnel * 0.35 + hex * 0.06 + wave * 0.04 + sparkle * 0.2) * uProgress;
+          vec3 col = uColor * (0.8 + fresnel * 0.4 + sparkle * 1.5);
 
-          gl_FragColor = vec4(col, alpha * 0.7);
+          gl_FragColor = vec4(col, alpha * 0.45);
         }
       `,
       transparent: true,
@@ -3142,11 +3143,11 @@
       updateSky();
 
       // Window glow at night
-      const nightGlow = Math.max(0, 1 - daylight * 2);
+      const nightGlow = Math.max(0, 1 - daylight * 1.5);
       windows.forEach(w => {
-        w.material.emissiveIntensity = nightGlow * 0.4;
+        w.material.emissiveIntensity = nightGlow * 0.8;
       });
-      porchLight.intensity = 0.2 + nightGlow * 0.8;
+      porchLight.intensity = 0.3 + nightGlow * 1.5;
 
       // Barrier animation
       if (barrierActive && barrierProgress < 1) barrierProgress = Math.min(1, barrierProgress + 0.02);
@@ -3154,7 +3155,7 @@
       barrierMat.uniforms.uTime.value = t;
       barrierMat.uniforms.uProgress.value = barrierProgress;
       barrierMat.uniforms.uCamPos.value.copy(camera.position);
-      barrierLight.intensity = barrierProgress * 2;
+      barrierLight.intensity = barrierProgress * (1 + (1 - daylight) * 3);
 
       // Barrier hit pulse (scale to 1.05 then back)
       if (barrierHitPulse > 0) {
