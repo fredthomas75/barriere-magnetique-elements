@@ -445,8 +445,8 @@
       const fogColor = new THREE.Color(fr, fg, fb);
       const wCode = weather.weatherCode;
       const isFog = (wCode === 45 || wCode === 48);
-      const fogNear = isFog ? 5 : (50 + d * 20);
-      const fogFar = isFog ? 30 : (120 + d * 40);
+      const fogNear = isFog ? 5 : (80 + d * 20);
+      const fogFar = isFog ? 30 : (180 + d * 20);
       scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
 
       // Lighting
@@ -454,11 +454,12 @@
       sunLight.color.setHSL(0.1, 0.6, 0.5 + d * 0.5);
       const sunAngle = (daylight - 0.5) * Math.PI;
       sunLight.position.set(Math.cos(sunAngle) * 20, Math.sin(sunAngle) * 20 + 5, 8);
-      moonLight.intensity = (1 - d) * 0.5;
-      ambientLight.intensity = 0.35 + d * 0.35;
-      ambientLight.color.setHSL(0.6, 0.2, 0.4 + d * 0.3);
-      renderer.toneMappingExposure = 0.8 + d * 0.5;
-      hemiLight.intensity = 0.3 + d * 0.3;
+      moonLight.intensity = (1 - d) * 1.2; // strong moonlight
+      moonLight.color.setHSL(0.6, 0.15, 0.8);
+      ambientLight.intensity = 0.5 + d * 0.3;
+      ambientLight.color.setHSL(0.6, 0.15, 0.5 + d * 0.2);
+      renderer.toneMappingExposure = 1.0 + d * 0.3;
+      hemiLight.intensity = 0.4 + d * 0.25;
 
       // Stars
       const starOpacity = d < 0.3 ? 1.0 - d / 0.3 : d < 0.5 ? (0.5 - d) / 0.2 * 0.3 : 0;
@@ -554,8 +555,8 @@
     // ===== GROUND =====
     const groundGeo = new THREE.PlaneGeometry(60, 60);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x2a5a1a, roughness: 0.9, metalness: 0.0,
-      emissive: 0x0a1a08, emissiveIntensity: 0.3
+      color: 0x2a5a1a, roughness: 0.8, metalness: 0.0,
+      emissive: 0x152a10, emissiveIntensity: 0.5
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -608,7 +609,7 @@
     })();
 
     const bodyGeo = new THREE.BoxGeometry(8, 6, 6);
-    const bodyMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85, metalness: 0.05, emissive: 0x1a0a05, emissiveIntensity: 0.2 });
+    const bodyMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85, metalness: 0.05, emissive: 0x2a1510, emissiveIntensity: 0.4 });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 3;
     body.castShadow = true;
@@ -790,10 +791,12 @@
           float sparkle = sin(vUv.x * 100.0 + uTime * 3.0) * sin(vUv.y * 80.0 - uTime * 2.0);
           sparkle = pow(max(sparkle, 0.0), 8.0);
 
-          float alpha = (fresnel * 0.35 + hex * 0.06 + wave * 0.04 + sparkle * 0.2) * uProgress;
-          vec3 col = uColor * (0.8 + fresnel * 0.4 + sparkle * 1.5);
+          // Very subtle barrier — thin energy lines, not solid dome
+          float edgeOnly = pow(fresnel, 4.0); // only visible at extreme edges
+          float alpha = (edgeOnly * 0.3 + hex * 0.03 + sparkle * 0.15) * uProgress;
+          vec3 col = uColor * (0.6 + sparkle * 2.0);
 
-          gl_FragColor = vec4(col, alpha * 0.45);
+          gl_FragColor = vec4(col, alpha * 0.25);
         }
       `,
       transparent: true,
@@ -3186,7 +3189,7 @@
       }
 
       // Barrier particles
-      particlesMat.opacity = barrierProgress * 0.7;
+      particlesMat.opacity = barrierProgress * 0.35;
       const posArr = particlesGeo.attributes.position.array;
       for (let i = 0; i < particleCount; i++) {
         const angle = Math.atan2(posArr[i*3+2], posArr[i*3]);
