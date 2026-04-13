@@ -92,6 +92,12 @@
       background-size: 500% 500%; color: #111; animation: gradientShift 2s linear infinite; display: none; }
     .btn-metalwave { background: linear-gradient(135deg, #888, #c0c0c0, #ffaa00, #00ccff);
       background-size: 400% 400%; color: #1a1a2e; animation: gradientShift 3s ease infinite; display: none; }
+    .btn-laser { background: linear-gradient(135deg, #88ccff, #ffffff, #cc88ff, #44ffff, #ffffff, #aa66ff);
+      background-size: 600% 600%; color: #112; font-weight: 800; animation: gradientShift 1.5s ease infinite; display: none;
+      border: 2px solid rgba(200,220,255,0.7); text-shadow: 0 0 8px rgba(150,200,255,0.8); }
+    .btn-plants { background: linear-gradient(135deg, #228822, #44aa22, #66cc33, #338833);
+      background-size: 400% 400%; color: #001a00; font-weight: 800; animation: gradientShift 3s ease infinite; display: none;
+      border: 1px solid rgba(100,200,50,0.5); }
     .btn-ultraboost { background: linear-gradient(135deg, #ff0000, #ff6600, #ffcc00, #ff0000);
       background-size: 500% 500%; color: #fff; font-weight: 900;
       text-shadow: 0 0 10px rgba(255,0,0,0.8); animation: gradientShift 1.5s ease infinite; display: none;
@@ -136,6 +142,8 @@
     <button class="btn btn-pokemon" id="btnPokemon" onclick="triggerPokemon()">POKEMON</button>
     <button class="btn btn-tornado" id="btnTornado" onclick="triggerTornado()">🌪️ TORNADE</button>
     <button class="btn btn-metalwave" id="btnMetalWave" onclick="triggerMetalWave()">DRAGON METAL</button>
+    <button class="btn btn-laser" id="btnLaser" onclick="triggerDiamondLaser()">💎 LASER DIAMANT</button>
+    <button class="btn btn-plants" id="btnPlants" onclick="triggerPlants()">🌿 PLANTES</button>
     <button class="btn btn-ultraboost" id="btnUltraBoost" onclick="triggerUltraBoost()">ULTRA BOOST</button>
     <button class="btn btn-deactivate" id="btnDeactivate" onclick="deactivateBarrier()">Desactiver</button>
   </div>
@@ -1414,7 +1422,7 @@
 
     // ===== GAME STATE =====
     let lastFireTime = 0;
-    const allBtns = ['btnSuperBoost','btnCobra','btnLightning','btnFishWave','btnSharkWave','btnPokemon','btnTornado','btnMetalWave','btnUltraBoost'];
+    const allBtns = ['btnSuperBoost','btnCobra','btnLightning','btnFishWave','btnSharkWave','btnPokemon','btnTornado','btnMetalWave','btnLaser','btnPlants','btnUltraBoost'];
 
     window.activateBarrier = function() {
       if (barrierActive) return;
@@ -1431,6 +1439,10 @@
       barrierActive = false; superBoostActive = false;
       cobraActive = false; lightningActive = false; fishWaveActive = false;
       sharkWaveActive = false; pokemonActive = false; tornadoActive = false; metalWaveActive = false;
+      laserActive = false; plantsActive = false;
+      if (laserBeam) { scene.remove(laserBeam); laserBeam = null; }
+      if (laserGlow) { scene.remove(laserGlow); laserGlow = null; }
+      plantObjs.forEach(p => scene.remove(p)); plantObjs = [];
       document.getElementById('shieldStatus').className = 'shield-status inactive';
       document.getElementById('shieldStatus').textContent = 'BOUCLIER INACTIF';
       document.getElementById('btnActivate').style.display = 'block';
@@ -3687,6 +3699,363 @@
       }
     }
 
+    // ===== DIAMOND LASER =====
+    let laserActive = false, laserTimer = 0;
+    let laserBeam = null, laserTarget = null, laserGlow = null;
+
+    window.triggerDiamondLaser = function() {
+      if (laserActive) return;
+      laserActive = true; laserTimer = 0;
+      playSound('lightning');
+
+      // Create diamond crystal at top of barrier
+      const diamondGeo = new THREE.OctahedronGeometry(0.6, 0);
+      const diamondMat = new THREE.MeshStandardMaterial({
+        color: 0xccddff, roughness: 0.05, metalness: 0.9,
+        emissive: 0x6688ff, emissiveIntensity: 0.8, transparent: true, opacity: 0.85
+      });
+      laserGlow = new THREE.Group();
+      const diamond = new THREE.Mesh(diamondGeo, diamondMat);
+      diamond.position.set(0, 10, 0);
+      laserGlow.add(diamond);
+      // Rotating sparkle ring around diamond
+      const ringGeo = new THREE.TorusGeometry(1, 0.03, 8, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xaaccff, transparent: true, opacity: 0.6 });
+      const ring1 = new THREE.Mesh(ringGeo, ringMat);
+      ring1.position.set(0, 10, 0);
+      laserGlow.add(ring1);
+      const ring2 = new THREE.Mesh(ringGeo, ringMat.clone());
+      ring2.position.set(0, 10, 0);
+      ring2.rotation.x = Math.PI / 2;
+      laserGlow.add(ring2);
+      // Diamond point light
+      const dLight = new THREE.PointLight(0x88aaff, 3, 20);
+      dLight.position.set(0, 10, 0);
+      laserGlow.add(dLight);
+      scene.add(laserGlow);
+    };
+
+    function updateDiamondLaser(t) {
+      if (!laserActive) return;
+      laserTimer++;
+
+      // Rotate diamond and rings
+      if (laserGlow) {
+        laserGlow.children.forEach((c, i) => {
+          if (i === 0) { c.rotation.y = t * 2; c.rotation.x = t * 1.5; } // diamond
+          else if (i < 3) { c.rotation.z = t * (3 + i); } // rings
+        });
+      }
+
+      // Remove old beam
+      if (laserBeam) { scene.remove(laserBeam); laserBeam = null; }
+
+      // Every 25 frames, fire beam at a monster
+      if (laserTimer % 25 === 0 && laserTimer < 350) {
+        const targets = monsters.filter(m => m.userData.state === 'approaching');
+        if (targets.length > 0) {
+          laserTarget = targets[Math.floor(Math.random() * targets.length)];
+
+          // Create beam from diamond to monster
+          const start = new THREE.Vector3(0, 10, 0);
+          const end = laserTarget.position.clone();
+          const dir = end.clone().sub(start);
+          const len = dir.length();
+          dir.normalize();
+
+          // Main beam (bright white-blue tube)
+          const beamGeo = new THREE.CylinderGeometry(0.08, 0.08, len, 8);
+          const beamMat = new THREE.MeshBasicMaterial({
+            color: 0xddeeff, transparent: true, opacity: 0.9
+          });
+          const beam = new THREE.Mesh(beamGeo, beamMat);
+
+          // Outer glow beam
+          const glowGeo = new THREE.CylinderGeometry(0.25, 0.25, len, 8);
+          const glowMat = new THREE.MeshBasicMaterial({
+            color: 0x6688ff, transparent: true, opacity: 0.3,
+            blending: THREE.AdditiveBlending, depthWrite: false
+          });
+          const glow = new THREE.Mesh(glowGeo, glowMat);
+
+          laserBeam = new THREE.Group();
+          laserBeam.add(beam);
+          laserBeam.add(glow);
+
+          // Position and orient beam
+          const mid = start.clone().add(end).multiplyScalar(0.5);
+          laserBeam.position.copy(mid);
+          laserBeam.lookAt(end);
+          laserBeam.children.forEach(c => { c.rotation.x = Math.PI / 2; });
+
+          scene.add(laserBeam);
+
+          // Kill the monster with electric effect
+          killMonster(laserTarget, t);
+          laserTarget.userData.flyVel.y = 0.3;
+
+          // Electric sparks at impact
+          for (let i = 0; i < 8; i++) {
+            const spark = new THREE.Mesh(
+              new THREE.SphereGeometry(0.1, 4, 4),
+              new THREE.MeshBasicMaterial({ color: 0xaaddff })
+            );
+            spark.position.copy(end).add(new THREE.Vector3(
+              (Math.random()-0.5)*2, (Math.random()-0.5)*2, (Math.random()-0.5)*2
+            ));
+            spark.userData = { life: 15 };
+            scene.add(spark);
+            // Quick cleanup
+            setTimeout(() => scene.remove(spark), 500);
+          }
+
+          playSound('lightning');
+          // Flash
+          renderer.toneMappingExposure += 0.3;
+          setTimeout(() => { renderer.toneMappingExposure -= 0.3; }, 80);
+        }
+      }
+
+      // Remove beam after 8 frames
+      if (laserTimer % 25 > 8 && laserBeam) {
+        scene.remove(laserBeam); laserBeam = null;
+      }
+
+      // End
+      if (laserTimer > 400) {
+        laserActive = false;
+        if (laserBeam) { scene.remove(laserBeam); laserBeam = null; }
+        if (laserGlow) { scene.remove(laserGlow); laserGlow = null; }
+      }
+    }
+
+    // ===== CARNIVOROUS PLANTS =====
+    let plantsActive = false, plantsTimer = 0;
+    let plantObjs = [];
+
+    window.triggerPlants = function() {
+      if (plantsActive) return;
+      plantsActive = true; plantsTimer = 0;
+      plantObjs.forEach(p => scene.remove(p)); plantObjs = [];
+      playSound('cobra');
+
+      // Spawn 5 carnivorous plants around the barrier
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2 + Math.random() * 0.5;
+        const dist = 10.5 + Math.random() * 2;
+        const plant = new THREE.Group();
+
+        // Stem (green cylinder, slightly curved via segments)
+        const stemHeight = 2.5 + Math.random();
+        const stemGeo = new THREE.CylinderGeometry(0.08, 0.15, stemHeight, 8);
+        const stemMat = new THREE.MeshStandardMaterial({
+          color: 0x228822, roughness: 0.7, emissive: 0x0a2a0a, emissiveIntensity: 0.3
+        });
+        const stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.position.y = stemHeight / 2;
+        plant.add(stem);
+
+        // Leaves along stem
+        for (let l = 0; l < 3; l++) {
+          const leaf = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.8, 0.3),
+            new THREE.MeshStandardMaterial({
+              color: 0x33aa22, roughness: 0.6, side: THREE.DoubleSide,
+              emissive: 0x0a1a08, emissiveIntensity: 0.2
+            })
+          );
+          leaf.position.set(0.3 * (l % 2 === 0 ? 1 : -1), 0.5 + l * 0.7, 0);
+          leaf.rotation.z = (l % 2 === 0 ? -0.4 : 0.4);
+          plant.add(leaf);
+        }
+
+        // Head — the trap (two jaws)
+        const headGroup = new THREE.Group();
+        headGroup.position.y = stemHeight;
+        headGroup.name = 'head';
+
+        // Upper jaw
+        const jawGeo = new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        const jawMat = new THREE.MeshStandardMaterial({
+          color: 0xcc2255, roughness: 0.5, emissive: 0x440022, emissiveIntensity: 0.3
+        });
+        const upperJaw = new THREE.Mesh(jawGeo, jawMat);
+        upperJaw.name = 'upperJaw';
+        headGroup.add(upperJaw);
+
+        // Lower jaw
+        const lowerJaw = new THREE.Mesh(jawGeo, jawMat.clone());
+        lowerJaw.rotation.x = Math.PI;
+        lowerJaw.name = 'lowerJaw';
+        headGroup.add(lowerJaw);
+
+        // Inner mouth (red/pink)
+        const innerMat = new THREE.MeshStandardMaterial({
+          color: 0xff3366, roughness: 0.4, emissive: 0x880033, emissiveIntensity: 0.4
+        });
+        const inner = new THREE.Mesh(new THREE.CircleGeometry(0.4, 12), innerMat);
+        inner.rotation.x = -Math.PI / 2;
+        inner.position.y = 0.02;
+        headGroup.add(inner);
+
+        // Teeth (white spikes along jaw edges)
+        for (let tt = 0; tt < 8; tt++) {
+          const toothAngle = (tt / 8) * Math.PI * 2;
+          const tooth = new THREE.Mesh(
+            new THREE.ConeGeometry(0.04, 0.15, 4),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 })
+          );
+          tooth.position.set(Math.cos(toothAngle) * 0.38, 0.05, Math.sin(toothAngle) * 0.38);
+          headGroup.add(tooth);
+        }
+
+        // Eyes (two glowing dots on upper jaw)
+        [-1, 1].forEach(side => {
+          const eye = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
+          );
+          eye.position.set(side * 0.2, 0.3, 0.25);
+          headGroup.add(eye);
+        });
+
+        // Vine tendrils
+        for (let v = 0; v < 2; v++) {
+          const vine = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.02, 1.5, 4),
+            stemMat.clone()
+          );
+          vine.position.set((v === 0 ? -1 : 1) * 0.4, stemHeight - 0.5, 0);
+          vine.rotation.z = (v === 0 ? 0.6 : -0.6);
+          plant.add(vine);
+        }
+
+        plant.add(headGroup);
+
+        plant.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+        plant.lookAt(0, 0, 0); // face the house
+        plant.rotation.y += Math.PI; // but heads face outward toward monsters
+
+        // Self-illumination
+        const pLight = new THREE.PointLight(0x44aa22, 0.5, 5);
+        pLight.position.set(0, stemHeight, 0);
+        plant.add(pLight);
+
+        plant.userData = {
+          target: null, biteTimer: 0, jawOpen: 0.4,
+          swayPhase: Math.random() * Math.PI * 2,
+          huntRange: 6 + Math.random() * 2,
+          digestTimer: 0, idx: i
+        };
+
+        scene.add(plant);
+        plantObjs.push(plant);
+      }
+    };
+
+    function updatePlants(t) {
+      if (!plantsActive) return;
+      plantsTimer++;
+
+      for (const plant of plantObjs) {
+        const pd = plant.userData;
+        pd.swayPhase += 0.02;
+
+        // Gentle sway
+        plant.rotation.z = Math.sin(pd.swayPhase) * 0.05;
+
+        // Find head group
+        let headGroup = null;
+        plant.children.forEach(c => { if (c.name === 'head') headGroup = c; });
+        if (!headGroup) continue;
+
+        // Digesting — jaws closed, wait
+        if (pd.digestTimer > 0) {
+          pd.digestTimer--;
+          pd.jawOpen = Math.max(0, pd.jawOpen - 0.03);
+          // Apply jaw animation
+          headGroup.children.forEach(c => {
+            if (c.name === 'upperJaw') c.rotation.x = -pd.jawOpen * 0.8;
+            if (c.name === 'lowerJaw') c.rotation.x = Math.PI + pd.jawOpen * 0.8;
+          });
+          if (pd.digestTimer === 0) pd.jawOpen = 0.4;
+          continue;
+        }
+
+        // Open jaws when idle
+        pd.jawOpen = 0.4 + Math.sin(t * 2 + pd.idx) * 0.1;
+
+        // Hunt nearest monster
+        if (!pd.target || pd.target.userData?.state !== 'approaching' || !monsters.includes(pd.target)) {
+          pd.target = null;
+          let closest = null, cDist = Infinity;
+          const plantWorldPos = new THREE.Vector3();
+          plant.getWorldPosition(plantWorldPos);
+          plantWorldPos.y += 2.5;
+          for (const m of monsters) {
+            if (m.userData.state !== 'approaching') continue;
+            const d = plantWorldPos.distanceTo(m.position);
+            if (d < cDist && d < pd.huntRange) { cDist = d; closest = m; }
+          }
+          pd.target = closest;
+        }
+
+        if (pd.target) {
+          // Turn head toward target
+          const plantWorldPos = new THREE.Vector3();
+          plant.getWorldPosition(plantWorldPos);
+          const dir = pd.target.position.clone().sub(plantWorldPos);
+          const targetY = Math.atan2(dir.x, dir.z);
+          let yDiff = targetY - plant.rotation.y;
+          while (yDiff > Math.PI) yDiff -= Math.PI * 2;
+          while (yDiff < -Math.PI) yDiff += Math.PI * 2;
+          plant.rotation.y += yDiff * 0.08;
+
+          // Open jaws wide when close
+          const d = dir.length();
+          if (d < 3) pd.jawOpen = 0.8;
+
+          // SNAP — eat the monster!
+          if (d < 2) {
+            pd.jawOpen = 0; // jaws snap shut
+            pd.digestTimer = 120; // digest for 2 seconds
+            pd.target.userData.state = 'hit';
+            pd.target.userData.hitTime = t;
+            pd.target.userData.flyVel.set(0, -0.1, 0); // pull down into plant
+            pd.target.scale.set(0.01, 0.01, 0.01); // shrink (eaten!)
+            monstersDefeated++;
+            document.getElementById('monsterCount').textContent = monstersDefeated;
+            playSound('hit');
+            // Green digest particles
+            for (let p = 0; p < 10; p++) {
+              const spark = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08, 4, 4),
+                new THREE.MeshBasicMaterial({ color: 0x44ff22, transparent: true, opacity: 0.7 })
+              );
+              spark.position.copy(plantWorldPos).add(new THREE.Vector3(
+                (Math.random()-0.5)*1.5, 2 + Math.random(), (Math.random()-0.5)*1.5
+              ));
+              scene.add(spark);
+              setTimeout(() => scene.remove(spark), 600);
+            }
+            pd.target = null;
+          }
+        }
+
+        // Apply jaw animation
+        headGroup.children.forEach(c => {
+          if (c.name === 'upperJaw') c.rotation.x = -pd.jawOpen * 0.8;
+          if (c.name === 'lowerJaw') c.rotation.x = Math.PI + pd.jawOpen * 0.8;
+        });
+      }
+
+      // End
+      if (plantsTimer > 600) {
+        plantsActive = false;
+        plantObjs.forEach(p => scene.remove(p)); plantObjs = [];
+      }
+    }
+
     // ===== ULTRA BOOST =====
     window.triggerUltraBoost = function() {
       if (!barrierActive) return;
@@ -3945,6 +4314,8 @@
       updateTornado(t);
       updatePokemon(t);
       updateMetalWave(t);
+      updateDiamondLaser(t);
+      updatePlants(t);
 
       // OrbitControls damping update
       controls.update();
